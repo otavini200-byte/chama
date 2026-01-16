@@ -13,8 +13,8 @@ app.use(cors({ origin: "*", methods: ["GET", "POST", "OPTIONS"], allowedHeaders:
 app.use(express.json());
 
 // ✅ Serve telas do painel
-app.use(express.static(path.join(__dirname, "public")));
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
+app.use(express.static(path.join(__dirname, "Public")));
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "Public", "index.html")));
 
 // ✅ Banco
 const DB_PATH = path.join(__dirname, "db.sqlite");
@@ -361,3 +361,4 @@ app.post("/api/reset/confirm", async (req, res) => {
 // ✅ Porta compatível com Render
 const PORT = process.env.PORT || 3333;
 app.listen(PORT, "0.0.0.0", () => console.log("✅ Server ON na porta " + PORT));
+
