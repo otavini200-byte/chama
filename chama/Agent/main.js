@@ -10,7 +10,7 @@ function createWindow(){
     title: "Remote Desk • Agent",
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true,
+      contextIsolation: true
     }
   });
 
