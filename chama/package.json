@@ -1,0 +1,7 @@
+{
+  "name": "remote-desk-root",
+  "private": true,
+  "scripts": {
+    "start": "node server/index.js"
+  }
+}
