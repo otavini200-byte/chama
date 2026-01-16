@@ -1,5 +1,12 @@
 console.log("✅ app.js carregou");
 
+// ✅ API BASE (Render)
+const API_BASE =
+  location.hostname.includes("github.io") || location.protocol === "file:"
+    ? "https://chama-3fxc.onrender.com"
+    : "";
+
+
 function $(id){ return document.getElementById(id); }
 
 function setMsg(id, text){
@@ -538,3 +545,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     await bootApp();
   }
 });
+
