@@ -12,21 +12,22 @@ const app = express();
 app.use(cors({ origin: "*", methods: ["GET", "POST", "OPTIONS"], allowedHeaders: ["Content-Type", "Authorization"] }));
 app.use(express.json());
 
-// ✅ ATENÇÃO: pasta é Public (P MAIÚSCULO)
+// ✅ ATENÇÃO: sua pasta é Public com P MAIÚSCULO
 const STATIC_DIR = path.join(__dirname, "Public");
 app.use(express.static(STATIC_DIR));
 
-// ✅ abre index.html ao entrar na raiz
-app.get("/", (req, res) => {
-  res.sendFile(path.join(STATIC_DIR, "index.html"));
-});
+// ✅ raiz abre o painel
+app.get("/", (req, res) => res.sendFile(path.join(STATIC_DIR, "index.html")));
 
+// ✅ Banco
 const DB_PATH = path.join(__dirname, "db.sqlite");
 const db = new sqlite3.Database(DB_PATH);
 
+// ✅ Secrets
 const JWT_SECRET = process.env.JWT_SECRET || "DEV_SECRET_CHANGE_ME";
 const APP_URL = process.env.APP_URL || "https://chama-3fxc.onrender.com";
 
+// ✅ SMTP (email real)
 const SMTP_HOST = process.env.SMTP_HOST || "";
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
 const SMTP_USER = process.env.SMTP_USER || "";
@@ -69,8 +70,16 @@ function auth(req, res, next) {
   }
 }
 
-// ========= DB =========
+function devOnly(req, res, next) {
+  if (req.user?.role !== "dev") {
+    return res.status(403).json({ ok: false, message: "Acesso DEV apenas." });
+  }
+  next();
+}
+
+// ========= DB SCHEMA =========
 db.serialize(() => {
+  // Empresas (cada chave gera uma “empresa”)
   db.run(`
     CREATE TABLE IF NOT EXISTS companies (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,6 +88,17 @@ db.serialize(() => {
     )
   `);
 
+  // ✅ CHAVES válidas (você vai gerar e controlar)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS company_keys (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_key TEXT UNIQUE,
+      active INTEGER DEFAULT 1,
+      created_at INTEGER
+    )
+  `);
+
+  // Users
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,11 +106,13 @@ db.serialize(() => {
       username TEXT UNIQUE,
       email TEXT UNIQUE,
       password_hash TEXT,
-      role TEXT DEFAULT 'client',
+      role TEXT DEFAULT 'client',      -- client | operator | dev
+      is_admin INTEGER DEFAULT 0,      -- 1 só pro DEV (por enquanto)
       created_at INTEGER
     )
   `);
 
+  // Reset tokens
   db.run(`
     CREATE TABLE IF NOT EXISTS reset_tokens (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,6 +124,7 @@ db.serialize(() => {
   `);
 });
 
+// ========= Helpers =========
 function createCompanyIfNeeded(company_key) {
   return new Promise((resolve, reject) => {
     db.get(`SELECT id FROM companies WHERE company_key=?`, [company_key], (err, row) => {
@@ -120,11 +143,91 @@ function createCompanyIfNeeded(company_key) {
   });
 }
 
+function isCompanyKeyValid(company_key) {
+  return new Promise((resolve) => {
+    db.get(
+      `SELECT id FROM company_keys WHERE company_key=? AND active=1`,
+      [company_key],
+      (err, row) => resolve(!err && !!row)
+    );
+  });
+}
+
+function generatePrettyKey() {
+  // exemplo: ABCD-1234-EFGH
+  const a = crypto.randomBytes(2).toString("hex").toUpperCase(); // 4
+  const b = crypto.randomBytes(2).toString("hex").toUpperCase(); // 4
+  const c = crypto.randomBytes(2).toString("hex").toUpperCase(); // 4
+  return `${a}-${b}-${c}`;
+}
+
+function createNewCompanyKey() {
+  const key = generatePrettyKey();
+  return new Promise((resolve, reject) => {
+    db.run(
+      `INSERT INTO company_keys (company_key, active, created_at) VALUES (?,?,?)`,
+      [key, 1, Date.now()],
+      function (err) {
+        if (err) return reject(err);
+        resolve(key);
+      }
+    );
+  });
+}
+
+// ========= SEED DEV =========
+async function seedDevAccount() {
+  const DEV_USERNAME = "otavio";
+  const DEV_EMAIL = "otavini200@gmail.com";
+  const DEV_PASSWORD = "26106867";
+
+  db.get(
+    `SELECT id FROM users WHERE username=? OR email=?`,
+    [DEV_USERNAME, DEV_EMAIL],
+    async (err, row) => {
+      if (err) {
+        console.log("❌ seedDevAccount erro:", err);
+        return;
+      }
+      if (row) {
+        console.log("✅ Conta DEV já existe (otavio).");
+        return;
+      }
+
+      const hash = await bcrypt.hash(DEV_PASSWORD, 10);
+
+      db.run(
+        `INSERT INTO users (company_id, username, email, password_hash, role, is_admin, created_at)
+         VALUES (NULL,?,?,?,?,?,?)`,
+        [DEV_USERNAME, DEV_EMAIL, hash, "dev", 1, Date.now()],
+        function (err2) {
+          if (err2) {
+            console.log("❌ Falha ao criar DEV:", err2);
+            return;
+          }
+          console.log("✅ Conta DEV criada: otavio | 26106867 | dev");
+        }
+      );
+    }
+  );
+}
+
 // ========= API =========
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "chama-server", time: new Date().toISOString() });
 });
 
+// ✅ DEV: gerar chave nova
+app.post("/api/dev/key/new", auth, devOnly, async (req, res) => {
+  try {
+    const key = await createNewCompanyKey();
+    return res.json({ ok: true, company_key: key });
+  } catch {
+    return res.status(500).json({ ok: false, message: "Falha ao gerar chave." });
+  }
+});
+
+// ✅ checar usuário disponível
 app.post("/api/check-username", (req, res) => {
   const username = normalizeUsername(req.body?.username);
   if (!username) return res.status(400).json({ ok: false, message: "Usuário inválido." });
@@ -135,6 +238,7 @@ app.post("/api/check-username", (req, res) => {
   });
 });
 
+// ✅ signup (SEM DEV, só client/operator + chave válida)
 app.post("/api/signup", async (req, res) => {
   try {
     const company_key = normalizeKey(req.body?.company_key);
@@ -142,6 +246,13 @@ app.post("/api/signup", async (req, res) => {
     const email = normalizeLogin(req.body?.email);
     const password = String(req.body?.password || "");
     const confirm = String(req.body?.confirm || "");
+
+    // ✅ BLOQUEIO DEV total
+    if (String(req.body?.role || "").toLowerCase() === "dev") {
+      return res.status(403).json({ ok: false, message: "Nível DEV é exclusivo." });
+    }
+
+    // ✅ role permitido
     const role = req.body?.role === "operator" ? "operator" : "client";
 
     if (!company_key || !username || !email || !password || !confirm) {
@@ -152,6 +263,12 @@ app.post("/api/signup", async (req, res) => {
     }
     if (password !== confirm) {
       return res.status(400).json({ ok: false, message: "As senhas não conferem." });
+    }
+
+    // ✅ valida chave
+    const valid = await isCompanyKeyValid(company_key);
+    if (!valid) {
+      return res.status(403).json({ ok: false, message: "Chave de empresa inválida ou inativa." });
     }
 
     const companyId = await createCompanyIfNeeded(company_key);
@@ -169,9 +286,9 @@ app.post("/api/signup", async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
 
     db.run(
-      `INSERT INTO users (company_id, username, email, password_hash, role, created_at)
-       VALUES (?,?,?,?,?,?)`,
-      [companyId, username, email, hash, role, Date.now()],
+      `INSERT INTO users (company_id, username, email, password_hash, role, is_admin, created_at)
+       VALUES (?,?,?,?,?,?,?)`,
+      [companyId, username, email, hash, role, 0, Date.now()],
       function (err) {
         if (err) return res.status(500).json({ ok: false, message: "Erro ao criar conta." });
         return res.json({ ok: true, message: "Conta criada com sucesso!" });
@@ -182,6 +299,7 @@ app.post("/api/signup", async (req, res) => {
   }
 });
 
+// ✅ login
 app.post("/api/login", (req, res) => {
   const login = normalizeLogin(req.body?.login);
   const password = String(req.body?.password || "");
@@ -206,11 +324,12 @@ app.post("/api/login", (req, res) => {
       const token = jwt.sign(
         {
           id: user.id,
-          company_id: user.company_id,
+          company_id: user.company_id || null,
           company_key: user.company_key || "",
           username: user.username,
           email: user.email,
-          role: user.role
+          role: user.role,
+          is_admin: !!user.is_admin
         },
         JWT_SECRET,
         { expiresIn: "12h" }
@@ -225,16 +344,17 @@ app.post("/api/login", (req, res) => {
   );
 });
 
+// ✅ me
 app.get("/api/me", auth, (req, res) => {
   res.json({ ok: true, payload: req.user });
 });
 
+// ✅ esqueci senha (email)
 app.post("/api/forgot/send", (req, res) => {
   const email = normalizeLogin(req.body?.email);
-
   if (!email) return res.status(400).json({ ok: false, message: "Digite seu email." });
 
-  db.get(`SELECT id FROM users WHERE email=?`, [email], async (err, user) => {
+  db.get(`SELECT id, email FROM users WHERE email=?`, [email], async (err, user) => {
     if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
     if (!user) return res.status(404).json({ ok: false, message: "Email não encontrado." });
 
@@ -251,7 +371,11 @@ app.post("/api/forgot/send", (req, res) => {
 
         if (!hasMailerConfig()) {
           console.log("📩 LINK RESET (SEM SMTP):", link);
-          return res.json({ ok: true, message: "SMTP não configurado (veja logs).", debugLink: link });
+          return res.json({
+            ok: true,
+            message: "SMTP não configurado. Veja o link nos logs do Render.",
+            debugLink: link
+          });
         }
 
         try {
@@ -271,6 +395,7 @@ app.post("/api/forgot/send", (req, res) => {
                     Redefinir senha
                   </a>
                 </p>
+                <p>Se você não pediu isso, ignore este email.</p>
               </div>
             `
           });
@@ -284,47 +409,9 @@ app.post("/api/forgot/send", (req, res) => {
   });
 });
 
-app.get("/api/reset/verify", (req, res) => {
-  const token = String(req.query?.token || "");
-  if (!token) return res.status(400).json({ ok: false, message: "Token inválido." });
-
-  db.get(`SELECT * FROM reset_tokens WHERE token=?`, [token], (err, row) => {
-    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
-    if (!row) return res.status(404).json({ ok: false, message: "Token não encontrado." });
-    if (row.used) return res.status(410).json({ ok: false, message: "Token já usado." });
-    if (Date.now() > row.expires_at) return res.status(410).json({ ok: false, message: "Token expirado." });
-
-    return res.json({ ok: true });
-  });
-});
-
-app.post("/api/reset/confirm", async (req, res) => {
-  const token = String(req.body?.token || "");
-  const password = String(req.body?.password || "");
-  const confirm = String(req.body?.confirm || "");
-
-  if (!token || !password || !confirm) return res.status(400).json({ ok: false, message: "Dados inválidos." });
-  if (password.length < 6) return res.status(400).json({ ok: false, message: "Senha mínima: 6 caracteres." });
-  if (password !== confirm) return res.status(400).json({ ok: false, message: "As senhas não conferem." });
-
-  db.get(`SELECT * FROM reset_tokens WHERE token=?`, [token], async (err, row) => {
-    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
-    if (!row) return res.status(404).json({ ok: false, message: "Token inválido." });
-    if (row.used) return res.status(410).json({ ok: false, message: "Token já usado." });
-    if (Date.now() > row.expires_at) return res.status(410).json({ ok: false, message: "Token expirado." });
-
-    const hash = await bcrypt.hash(password, 10);
-
-    db.run(`UPDATE users SET password_hash=? WHERE id=?`, [hash, row.user_id], (err2) => {
-      if (err2) return res.status(500).json({ ok: false, message: "Erro ao atualizar senha." });
-
-      db.run(`UPDATE reset_tokens SET used=1 WHERE token=?`, [token], (err3) => {
-        if (err3) return res.status(500).json({ ok: false, message: "Erro ao finalizar reset." });
-        return res.json({ ok: true, message: "Senha atualizada com sucesso!" });
-      });
-    });
-  });
-});
-
+// ✅ server
 const PORT = process.env.PORT || 3333;
-app.listen(PORT, "0.0.0.0", () => console.log("✅ Server ON na porta " + PORT));
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("✅ Server ON na porta " + PORT);
+  seedDevAccount();
+});
