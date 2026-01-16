@@ -8,26 +8,23 @@ const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 
 const app = express();
-
 app.use(cors({ origin: "*", methods: ["GET", "POST", "OPTIONS"], allowedHeaders: ["Content-Type", "Authorization"] }));
 app.use(express.json());
 
-// ✅ ATENÇÃO: sua pasta é Public com P MAIÚSCULO
+// ✅ pasta Public (P MAIÚSCULO)
 const STATIC_DIR = path.join(__dirname, "Public");
 app.use(express.static(STATIC_DIR));
-
-// ✅ raiz abre o painel
 app.get("/", (req, res) => res.sendFile(path.join(STATIC_DIR, "index.html")));
 
-// ✅ Banco
+// ✅ banco
 const DB_PATH = path.join(__dirname, "db.sqlite");
 const db = new sqlite3.Database(DB_PATH);
 
-// ✅ Secrets
+// ✅ configs
 const JWT_SECRET = process.env.JWT_SECRET || "DEV_SECRET_CHANGE_ME";
 const APP_URL = process.env.APP_URL || "https://chama-3fxc.onrender.com";
 
-// ✅ SMTP (email real)
+// ✅ SMTP
 const SMTP_HOST = process.env.SMTP_HOST || "";
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
 const SMTP_USER = process.env.SMTP_USER || "";
@@ -37,7 +34,6 @@ const FROM_EMAIL = process.env.FROM_EMAIL || SMTP_USER;
 function hasMailerConfig() {
   return Boolean(SMTP_HOST && SMTP_USER && SMTP_PASS && FROM_EMAIL);
 }
-
 function createTransport() {
   return nodemailer.createTransport({
     host: SMTP_HOST,
@@ -77,9 +73,8 @@ function devOnly(req, res, next) {
   next();
 }
 
-// ========= DB SCHEMA =========
+// ========= DB =========
 db.serialize(() => {
-  // Empresas (cada chave gera uma “empresa”)
   db.run(`
     CREATE TABLE IF NOT EXISTS companies (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,7 +83,6 @@ db.serialize(() => {
     )
   `);
 
-  // ✅ CHAVES válidas (você vai gerar e controlar)
   db.run(`
     CREATE TABLE IF NOT EXISTS company_keys (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,7 +92,6 @@ db.serialize(() => {
     )
   `);
 
-  // Users
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -106,13 +99,12 @@ db.serialize(() => {
       username TEXT UNIQUE,
       email TEXT UNIQUE,
       password_hash TEXT,
-      role TEXT DEFAULT 'client',      -- client | operator | dev
-      is_admin INTEGER DEFAULT 0,      -- 1 só pro DEV (por enquanto)
+      role TEXT DEFAULT 'client', -- client | operator | dev
+      is_admin INTEGER DEFAULT 0,
       created_at INTEGER
     )
   `);
 
-  // Reset tokens
   db.run(`
     CREATE TABLE IF NOT EXISTS reset_tokens (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,7 +116,6 @@ db.serialize(() => {
   `);
 });
 
-// ========= Helpers =========
 function createCompanyIfNeeded(company_key) {
   return new Promise((resolve, reject) => {
     db.get(`SELECT id FROM companies WHERE company_key=?`, [company_key], (err, row) => {
@@ -154,13 +145,11 @@ function isCompanyKeyValid(company_key) {
 }
 
 function generatePrettyKey() {
-  // exemplo: ABCD-1234-EFGH
-  const a = crypto.randomBytes(2).toString("hex").toUpperCase(); // 4
-  const b = crypto.randomBytes(2).toString("hex").toUpperCase(); // 4
-  const c = crypto.randomBytes(2).toString("hex").toUpperCase(); // 4
+  const a = crypto.randomBytes(2).toString("hex").toUpperCase();
+  const b = crypto.randomBytes(2).toString("hex").toUpperCase();
+  const c = crypto.randomBytes(2).toString("hex").toUpperCase();
   return `${a}-${b}-${c}`;
 }
-
 function createNewCompanyKey() {
   const key = generatePrettyKey();
   return new Promise((resolve, reject) => {
@@ -175,41 +164,81 @@ function createNewCompanyKey() {
   });
 }
 
-// ========= SEED DEV =========
+/**
+ * ✅ SEED DEV "OTAVIO"
+ * - Se existir user com email DEV -> vira DEV e ganha username "otavio"
+ * - Se já existir um "otavio" que NÃO é o email DEV -> renomeia pra otavio_old_ID
+ * - Se não existir email DEV -> cria DEV do zero
+ */
 async function seedDevAccount() {
   const DEV_USERNAME = "otavio";
   const DEV_EMAIL = "otavini200@gmail.com";
   const DEV_PASSWORD = "26106867";
 
-  db.get(
-    `SELECT id FROM users WHERE username=? OR email=?`,
-    [DEV_USERNAME, DEV_EMAIL],
-    async (err, row) => {
-      if (err) {
-        console.log("❌ seedDevAccount erro:", err);
-        return;
-      }
-      if (row) {
-        console.log("✅ Conta DEV já existe (otavio).");
+  const hash = await bcrypt.hash(DEV_PASSWORD, 10);
+
+  db.get(`SELECT * FROM users WHERE email=?`, [DEV_EMAIL], (errEmail, userByEmail) => {
+    if (errEmail) {
+      console.log("❌ seedDevAccount erro email:", errEmail);
+      return;
+    }
+
+    db.get(`SELECT * FROM users WHERE username=?`, [DEV_USERNAME], (errUser, userByUsername) => {
+      if (errUser) {
+        console.log("❌ seedDevAccount erro username:", errUser);
         return;
       }
 
-      const hash = await bcrypt.hash(DEV_PASSWORD, 10);
+      const renameOldOtavioIfNeeded = (done) => {
+        if (!userByUsername) return done();
+        if (userByEmail && userByUsername.id === userByEmail.id) return done();
 
-      db.run(
-        `INSERT INTO users (company_id, username, email, password_hash, role, is_admin, created_at)
-         VALUES (NULL,?,?,?,?,?,?)`,
-        [DEV_USERNAME, DEV_EMAIL, hash, "dev", 1, Date.now()],
-        function (err2) {
-          if (err2) {
-            console.log("❌ Falha ao criar DEV:", err2);
+        const newName = `otavio_old_${userByUsername.id}`;
+        db.run(`UPDATE users SET username=? WHERE id=?`, [newName, userByUsername.id], (errRen) => {
+          if (errRen) {
+            console.log("❌ Falha ao renomear antigo otavio:", errRen);
             return;
           }
-          console.log("✅ Conta DEV criada: otavio | 26106867 | dev");
-        }
-      );
-    }
-  );
+          console.log(`✅ Usuário antigo 'otavio' renomeado para '${newName}'`);
+          done();
+        });
+      };
+
+      // ✅ Caso A: email DEV já existe -> vira DEV
+      if (userByEmail) {
+        renameOldOtavioIfNeeded(() => {
+          db.run(
+            `UPDATE users SET username=?, role='dev', is_admin=1, password_hash=? WHERE id=?`,
+            [DEV_USERNAME, hash, userByEmail.id],
+            (errUp) => {
+              if (errUp) {
+                console.log("❌ Falha ao transformar em DEV:", errUp);
+                return;
+              }
+              console.log("✅ Conta DEV garantida via EMAIL:", DEV_EMAIL);
+            }
+          );
+        });
+        return;
+      }
+
+      // ✅ Caso B: não existe email DEV -> cria DEV do zero
+      renameOldOtavioIfNeeded(() => {
+        db.run(
+          `INSERT INTO users (company_id, username, email, password_hash, role, is_admin, created_at)
+           VALUES (NULL,?,?,?,?,?,?)`,
+          [DEV_USERNAME, DEV_EMAIL, hash, "dev", 1, Date.now()],
+          (errIns) => {
+            if (errIns) {
+              console.log("❌ Falha ao criar conta DEV:", errIns);
+              return;
+            }
+            console.log("✅ Conta DEV criada do zero:", DEV_USERNAME, DEV_EMAIL);
+          }
+        );
+      });
+    });
+  });
 }
 
 // ========= API =========
@@ -217,7 +246,7 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "chama-server", time: new Date().toISOString() });
 });
 
-// ✅ DEV: gerar chave nova
+// ✅ DEV: gerar chave válida
 app.post("/api/dev/key/new", auth, devOnly, async (req, res) => {
   try {
     const key = await createNewCompanyKey();
@@ -227,7 +256,7 @@ app.post("/api/dev/key/new", auth, devOnly, async (req, res) => {
   }
 });
 
-// ✅ checar usuário disponível
+// ✅ check username
 app.post("/api/check-username", (req, res) => {
   const username = normalizeUsername(req.body?.username);
   if (!username) return res.status(400).json({ ok: false, message: "Usuário inválido." });
@@ -238,7 +267,7 @@ app.post("/api/check-username", (req, res) => {
   });
 });
 
-// ✅ signup (SEM DEV, só client/operator + chave válida)
+// ✅ signup (SEM DEV + chave válida + username reservado)
 app.post("/api/signup", async (req, res) => {
   try {
     const company_key = normalizeKey(req.body?.company_key);
@@ -247,7 +276,12 @@ app.post("/api/signup", async (req, res) => {
     const password = String(req.body?.password || "");
     const confirm = String(req.body?.confirm || "");
 
-    // ✅ BLOQUEIO DEV total
+    // ✅ username reservado pro DEV
+    if (username === "otavio") {
+      return res.status(403).json({ ok: false, message: "Usuário reservado." });
+    }
+
+    // ✅ bloqueio DEV
     if (String(req.body?.role || "").toLowerCase() === "dev") {
       return res.status(403).json({ ok: false, message: "Nível DEV é exclusivo." });
     }
@@ -265,7 +299,6 @@ app.post("/api/signup", async (req, res) => {
       return res.status(400).json({ ok: false, message: "As senhas não conferem." });
     }
 
-    // ✅ valida chave
     const valid = await isCompanyKeyValid(company_key);
     if (!valid) {
       return res.status(403).json({ ok: false, message: "Chave de empresa inválida ou inativa." });
@@ -335,11 +368,7 @@ app.post("/api/login", (req, res) => {
         { expiresIn: "12h" }
       );
 
-      return res.json({
-        ok: true,
-        token,
-        user: { username: user.username, email: user.email, role: user.role }
-      });
+      return res.json({ ok: true, token, user: { username: user.username, email: user.email, role: user.role } });
     }
   );
 });
@@ -354,7 +383,7 @@ app.post("/api/forgot/send", (req, res) => {
   const email = normalizeLogin(req.body?.email);
   if (!email) return res.status(400).json({ ok: false, message: "Digite seu email." });
 
-  db.get(`SELECT id, email FROM users WHERE email=?`, [email], async (err, user) => {
+  db.get(`SELECT id FROM users WHERE email=?`, [email], async (err, user) => {
     if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
     if (!user) return res.status(404).json({ ok: false, message: "Email não encontrado." });
 
@@ -371,11 +400,7 @@ app.post("/api/forgot/send", (req, res) => {
 
         if (!hasMailerConfig()) {
           console.log("📩 LINK RESET (SEM SMTP):", link);
-          return res.json({
-            ok: true,
-            message: "SMTP não configurado. Veja o link nos logs do Render.",
-            debugLink: link
-          });
+          return res.json({ ok: true, message: "SMTP não configurado. Veja logs do Render.", debugLink: link });
         }
 
         try {
@@ -389,8 +414,7 @@ app.post("/api/forgot/send", (req, res) => {
                 <h2>Recuperação de senha</h2>
                 <p>Clique no botão abaixo para criar uma nova senha. Este link expira em <b>20 minutos</b>.</p>
                 <p>
-                  <a href="${link}"
-                     style="display:inline-block;padding:12px 16px;border-radius:12px;
+                  <a href="${link}" style="display:inline-block;padding:12px 16px;border-radius:12px;
                      background:#6a4bc9;color:#fff;text-decoration:none;font-weight:700">
                     Redefinir senha
                   </a>
@@ -409,7 +433,6 @@ app.post("/api/forgot/send", (req, res) => {
   });
 });
 
-// ✅ server
 const PORT = process.env.PORT || 3333;
 app.listen(PORT, "0.0.0.0", () => {
   console.log("✅ Server ON na porta " + PORT);
