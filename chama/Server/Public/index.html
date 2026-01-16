@@ -21,7 +21,7 @@
         </div>
       </header>
 
-      <!-- LOGIN (TELA PRINCIPAL) -->
+      <!-- ✅ LOGIN (TELA PRINCIPAL) -->
       <section id="screenLogin" class="screen">
         <div class="field">
           <label>Usuário ou Email</label>
@@ -42,24 +42,24 @@
             <span>Lembrar de mim</span>
           </label>
 
-          <!-- ✅ aqui vira o "Esqueci senha" (sem aba recuperar separada) -->
+          <!-- ✅ Esqueci a senha -->
           <button class="linkBtn" onclick="UI.show('screenForgot')">Esqueci a senha</button>
         </div>
 
         <button class="btn primary" onclick="API.login()">Entrar</button>
         <p class="msg" id="login_msg"></p>
 
-        <!-- ✅ Botão Criar conta no final -->
+        <!-- ✅ Criar conta embaixo -->
         <div class="bottomActions">
           <span class="muted">Não tem conta?</span>
           <button class="btn ghost" onclick="UI.show('screenSignup')">Criar conta</button>
         </div>
       </section>
 
-      <!-- SIGNUP -->
+      <!-- ✅ CRIAR CONTA (COM CHAVE) -->
       <section id="screenSignup" class="screen hidden">
         <div class="screenTop">
-          <button class="btn ghost mini" onclick="UI.show('login')">← Voltar</button>
+          <button class="btn ghost mini" onclick="UI.show('screenLogin')">← Voltar</button>
           <span class="smallTop">Criar conta</span>
         </div>
 
@@ -113,10 +113,10 @@
         <p class="msg" id="signup_msg"></p>
       </section>
 
-      <!-- FORGOT (ESQUECI A SENHA) -->
+      <!-- ✅ ESQUECI A SENHA -->
       <section id="screenForgot" class="screen hidden">
         <div class="screenTop">
-          <button class="btn ghost mini" onclick="UI.show('login')">← Voltar</button>
+          <button class="btn ghost mini" onclick="UI.show('screenLogin')">← Voltar</button>
           <span class="smallTop">Recuperação</span>
         </div>
 
@@ -133,7 +133,7 @@
         <p class="msg" id="forgot_msg"></p>
       </section>
 
-      <!-- DASHBOARD -->
+      <!-- ✅ DASH -->
       <section id="screenDash" class="screen hidden">
         <div class="dashTop">
           <div>
@@ -157,11 +157,6 @@
           </div>
         </div>
 
-        <div class="divider"></div>
-
-        <p class="small">
-          ✅ Base pronta. Próximo passo: painel do operador + lista de clientes e chamados.
-        </p>
       </section>
 
     </section>
@@ -170,4 +165,3 @@
   <script src="app.js"></script>
 </body>
 </html>
-
