@@ -1,338 +1,454 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Chama • Acesso</title>
-  <link rel="stylesheet" href="/style.css" />
-</head>
+:root{
+  --bg0:#07080b;
+  --bg1:#0b0d12;
+  --card: rgba(18,20,28,.78);
+  --line: rgba(255,255,255,.10);
+  --text:#eef2ff;
+  --muted: rgba(255,255,255,.62);
+  --muted2: rgba(255,255,255,.42);
+  --accent:#6a4bc9;
+  --accent2:#3ebaff;
+  --danger:#ff4b92;
+  --ok:#2ee59d;
+  --shadow: 0 30px 90px rgba(0,0,0,.55);
+}
 
-<body>
-  <div class="bg"></div>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Inter,Arial,sans-serif}
+body{background:var(--bg1);color:var(--text);min-height:100vh;overflow:hidden}
 
-  <main class="wrap">
-    <section class="card" id="authCard">
+.bg{
+  position:fixed;inset:0;
+  background:
+    radial-gradient(1200px 600px at 15% 10%, rgba(106,75,201,.35), transparent 60%),
+    radial-gradient(900px 550px at 90% 30%, rgba(62,186,255,.18), transparent 60%),
+    radial-gradient(800px 500px at 40% 95%, rgba(255,75,146,.12), transparent 60%),
+    linear-gradient(var(--bg0),var(--bg1));
+  filter:saturate(1.08);
+}
 
-      <header class="brand">
-        <div class="logo">CH</div>
-        <div class="brandText">
-          <h1>Chama</h1>
-          <p>Sistema de Chamados & Acesso</p>
-        </div>
-      </header>
+.wrap{
+  position:relative;
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  padding:22px;
+}
 
-      <!-- LOGIN -->
-      <section id="screenLogin" class="screen">
-        <div class="field">
-          <label>Usuário ou Email</label>
-          <input id="login_login" placeholder="ex: otavio ou otavini200@gmail.com" autocomplete="username" />
-        </div>
+.card{
+  width:min(460px, 94vw);
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:24px;
+  padding:18px 18px 14px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+  animation: pop .35s ease;
+}
 
-        <div class="field">
-          <label>Senha</label>
-          <div class="inputIcon">
-            <input id="login_pass" type="password" placeholder="••••••••" autocomplete="current-password" />
-            <button class="iconBtn" id="btnEyeLogin" title="Ver senha">👁</button>
-          </div>
-        </div>
+@keyframes pop{
+  from{transform:translateY(10px);opacity:.75}
+  to{transform:translateY(0);opacity:1}
+}
 
-        <div class="row">
-          <label class="check">
-            <input id="login_remember" type="checkbox" checked />
-            <span>Lembrar de mim</span>
-          </label>
+.brand{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  padding:4px 2px 12px;
+}
 
-          <button class="linkBtn" id="btnForgot">Esqueci a senha</button>
-        </div>
+.logo{
+  width:48px;height:48px;border-radius:16px;
+  display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  font-weight:900;
+  letter-spacing:.5px;
+  box-shadow:0 16px 50px rgba(106,75,201,.35);
+}
 
-        <button class="btn primary" id="btnLogin">Entrar</button>
-        <p class="msg" id="login_msg"></p>
+.brandText h1{font-size:18px;line-height:1.1}
+.brandText p{margin-top:2px;color:var(--muted);font-size:12px}
 
-        <div class="bottomActions">
-          <span class="muted">Não tem conta?</span>
-          <button class="btn ghost" id="btnGoSignup">Criar conta</button>
-        </div>
-      </section>
+.screen{padding:2px 2px 10px}
+.hidden{display:none !important}
 
-      <!-- SIGNUP -->
-      <section id="screenSignup" class="screen hidden">
-        <div class="screenTop">
-          <button class="btn ghost mini" id="btnBackFromSignup">← Voltar</button>
-          <span class="smallTop">Criar conta</span>
-        </div>
+.field{margin:10px 0 0}
+label{
+  display:block;
+  color:var(--muted);
+  font-size:12px;
+  margin:0 0 6px;
+}
 
-        <div class="pill">
-          <span>🔑 A chave da empresa é usada só aqui na criação.</span>
-        </div>
+input,select,textarea{
+  width:100%;
+  padding:12px 12px;
+  border-radius:16px;
+  background:rgba(0,0,0,.28);
+  border:1px solid var(--line);
+  outline:none;
+  color:var(--text);
+}
+textarea{resize:vertical}
+input:focus,select:focus,textarea:focus{
+  border-color:rgba(106,75,201,.65);
+  box-shadow:0 0 0 3px rgba(106,75,201,.16);
+}
 
-        <div class="field">
-          <label>Chave da Empresa</label>
-          <input id="su_key" placeholder="Ex: ABCD-1234-EFGH" />
-        </div>
+.inputIcon{position:relative}
+.iconBtn{
+  position:absolute;
+  right:8px;
+  top:50%;
+  transform:translateY(-50%);
+  width:42px;height:42px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.06);
+  color:var(--text);
+  cursor:pointer;
+}
+.iconBtn:active{transform:translateY(-50%) scale(.98)}
 
-        <div class="field">
-          <label>Usuário (único)</label>
-          <div class="inputIcon">
-            <input id="su_user" placeholder="Ex: otavio_cliente" />
-            <span class="hint" id="su_hint">Digite para verificar…</span>
-          </div>
-        </div>
+.hint{
+  position:absolute;
+  right:54px;
+  top:50%;
+  transform:translateY(-50%);
+  font-size:12px;
+  color:var(--muted2);
+}
 
-        <div class="field">
-          <label>Email</label>
-          <input id="su_email" type="email" placeholder="seuemail@gmail.com" />
-        </div>
+.row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin:12px 0 8px;
+}
 
-        <div class="field">
-          <label>Senha</label>
-          <div class="inputIcon">
-            <input id="su_pass" type="password" placeholder="mín. 6 caracteres" />
-            <button class="iconBtn" id="btnEyeSuPass" title="Ver senha">👁</button>
-          </div>
-        </div>
+.check{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:12px;
+  color:var(--muted);
+}
+.check input{width:16px;height:16px}
 
-        <div class="field">
-          <label>Confirmar Senha</label>
-          <div class="inputIcon">
-            <input id="su_confirm" type="password" placeholder="repete a senha" />
-            <button class="iconBtn" id="btnEyeSuConfirm" title="Ver senha">👁</button>
-          </div>
-        </div>
+.linkBtn{
+  border:none;
+  background:transparent;
+  color:rgba(62,186,255,.92);
+  cursor:pointer;
+  font-weight:800;
+  font-size:12px;
+}
+.linkBtn:hover{text-decoration:underline}
 
-        <div class="field">
-          <label>Tipo de Conta</label>
-          <select id="su_role">
-            <option value="client">Cliente</option>
-            <option value="operator">Operador</option>
-          </select>
-        </div>
+.btn{
+  width:100%;
+  padding:12px 14px;
+  border:none;
+  cursor:pointer;
+  border-radius:18px;
+  font-weight:900;
+  color:var(--text);
+  transition:.1s ease;
+  margin-top:10px;
+}
+.btn:active{transform:scale(.99)}
+.btn.primary{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  box-shadow:0 18px 60px rgba(106,75,201,.25);
+}
+.btn.ghost{
+  background:transparent;
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow:none;
+}
+.btn.mini{width:auto;padding:10px 12px;border-radius:14px;margin-top:0}
 
-        <button class="btn primary" id="btnSignup">Criar conta</button>
-        <p class="msg" id="signup_msg"></p>
-      </section>
+.msg{
+  margin-top:10px;
+  min-height:18px;
+  color:var(--muted);
+  font-size:12px;
+}
 
-      <!-- FORGOT -->
-      <section id="screenForgot" class="screen hidden">
-        <div class="screenTop">
-          <button class="btn ghost mini" id="btnBackFromForgot">← Voltar</button>
-          <span class="smallTop">Recuperação</span>
-        </div>
+.pill{
+  padding:10px 12px;
+  border-radius:16px;
+  background:rgba(106,75,201,.12);
+  border:1px solid rgba(106,75,201,.25);
+  color:rgba(255,255,255,.75);
+  font-size:12px;
+  margin-top:6px;
+}
 
-        <div class="pill">
-          <span>📩 Vamos mandar um link de recuperação no seu email.</span>
-        </div>
+.divider{
+  height:1px;
+  background:rgba(255,255,255,.08);
+  margin:12px 0;
+}
 
-        <div class="field">
-          <label>Email</label>
-          <input id="fg_email" type="email" placeholder="seuemail@gmail.com" />
-        </div>
+.bottomActions{
+  margin-top:14px;
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:space-between;
+}
+.bottomActions .muted{color:var(--muted);font-size:12px}
+.bottomActions .btn{margin-top:0}
 
-        <button class="btn primary" id="btnSendForgot">Enviar link</button>
-        <p class="msg" id="forgot_msg"></p>
-      </section>
-    </section>
+/* ========================= */
+/* ✅ APP SHELL (WK STYLE)   */
+/* ========================= */
+.app{
+  position:relative;
+  height:100vh;
+  width:100vw;
+  display:grid;
+  grid-template-columns: 280px 1fr;
+  gap:14px;
+  padding:16px;
+}
 
-    <!-- ✅ APP SHELL (painel) -->
-    <section class="app hidden" id="appShell">
+.sidebar{
+  background:rgba(18,20,28,.72);
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:22px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
 
-      <!-- sidebar -->
-      <aside class="sidebar">
-        <div class="sbTop">
-          <div class="sbLogo">CH</div>
-          <div class="sbTitle">
-            <b>Chama</b>
-            <span id="sbRole" class="sbSub">—</span>
-          </div>
-        </div>
+.sbTop{
+  display:flex; gap:12px; align-items:center;
+  padding:6px 6px 12px;
+}
+.sbLogo{
+  width:44px;height:44px;border-radius:16px;
+  display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  font-weight:900;
+}
+.sbTitle{display:flex;flex-direction:column;line-height:1.1}
+.sbTitle span{color:var(--muted);font-size:12px}
 
-        <nav class="sbNav" id="sbNav">
-          <!-- preenchido no JS -->
-        </nav>
+.nav{
+  margin-top:8px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.navItem{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:12px 12px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.08);
+  background:rgba(0,0,0,.18);
+  color:rgba(255,255,255,.86);
+  cursor:pointer;
+  font-weight:900;
+  text-align:left;
+}
+.navItem:hover{border-color:rgba(106,75,201,.35)}
+.navItem.active{
+  background:rgba(106,75,201,.16);
+  border-color:rgba(106,75,201,.35);
+}
+.navIcon{width:22px;display:inline-grid;place-items:center}
 
-        <div class="sbBottom">
-          <div class="sbUser" id="sbUser">—</div>
-          <button class="sbLogout" id="btnLogout">Sair</button>
-        </div>
-      </aside>
+.sbBottom{
+  margin-top:auto;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding:10px 6px 6px;
+}
+.sbUser{
+  display:flex; gap:10px; align-items:center;
+  padding:10px 12px;
+  border-radius:18px;
+  background:rgba(0,0,0,.20);
+  border:1px solid rgba(255,255,255,.08);
+}
+.sbUser b{font-size:13px}
+.sbUser small{display:block;color:var(--muted);font-size:12px}
+.dot{
+  width:10px;height:10px;border-radius:999px;background:rgba(46,229,157,.95);
+  box-shadow:0 0 0 4px rgba(46,229,157,.12);
+}
 
-      <!-- content -->
-      <div class="content">
-        <header class="topbar">
-          <div class="search">
-            <span class="searchIcon">⌕</span>
-            <input id="searchInput" placeholder="Buscar chamado..." />
-          </div>
+.main{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  overflow:hidden;
+}
 
-          <div class="topRight">
-            <div class="hello" id="helloTxt">Olá</div>
-          </div>
-        </header>
+.topbar{
+  background:rgba(18,20,28,.72);
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:22px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+  padding:14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
 
-        <main class="main">
-          <!-- DASH -->
-          <section class="page" id="pageDashboard">
-            <div class="grid4">
-              <div class="statCard">
-                <span class="statLabel">Abertos</span>
-                <b class="statValue" id="stOpen">0</b>
-              </div>
-              <div class="statCard">
-                <span class="statLabel">Em andamento</span>
-                <b class="statValue" id="stDoing">0</b>
-              </div>
-              <div class="statCard">
-                <span class="statLabel">Resolvidos</span>
-                <b class="statValue" id="stDone">0</b>
-              </div>
-              <div class="statCard">
-                <span class="statLabel">Suporte</span>
-                <b class="statValue ok">Online</b>
-              </div>
-            </div>
+.search{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(0,0,0,.22);
+  width:min(520px, 60vw);
+}
+.search input{
+  border:none;
+  background:transparent;
+  padding:0;
+  border-radius:0;
+  box-shadow:none;
+}
+.search input:focus{box-shadow:none}
 
-            <div class="grid2">
-              <div class="box">
-                <div class="boxHead">
-                  <b>Último chamado</b>
-                  <span class="mutedMini" id="lastTicketSub">—</span>
-                </div>
-                <div class="boxBody" id="lastTicketBox">
-                  <span class="mutedMini">Nenhum chamado ainda.</span>
-                </div>
-              </div>
+.hello{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  line-height:1.1;
+}
+.hello span{color:var(--muted);font-size:12px}
 
-              <div class="box">
-                <div class="boxHead">
-                  <b>Mensagem da empresa</b>
-                  <span class="mutedMini">Avisos</span>
-                </div>
-                <div class="boxBody">
-                  <div class="pillSoft">Não há mensagem cadastrada.</div>
-                </div>
-              </div>
-            </div>
-          </section>
+.content{
+  flex:1;
+  overflow:auto;
+  padding-right:6px;
+}
+.content::-webkit-scrollbar{width:10px}
+.content::-webkit-scrollbar-thumb{background:rgba(255,255,255,.10);border-radius:999px}
 
-          <!-- ABRIR CHAMADO -->
-          <section class="page hidden" id="pageNewTicket">
-            <div class="pageTitleRow">
-              <h2>Abrir chamado</h2>
-              <span class="mutedMini">Ao enviar, o acesso remoto fica permitido automaticamente ✅</span>
-            </div>
+.page{padding:6px 2px 22px}
+.pageTitle{
+  display:flex;flex-direction:column;gap:4px;
+  margin:6px 2px 12px;
+}
+.pageTitle b{font-size:16px}
+.mutedSmall{color:var(--muted);font-size:12px}
+.rowBetween{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
 
-            <div class="formGrid">
-              <div class="field2">
-                <label>Título</label>
-                <input id="t_title" placeholder="Ex: Sistema não abre / Impressora travou" />
-              </div>
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
-              <div class="field2">
-                <label>Categoria</label>
-                <select id="t_category">
-                  <option>Sistema</option>
-                  <option>Rede / Internet</option>
-                  <option>Impressora</option>
-                  <option>Hardware</option>
-                  <option>Outro</option>
-                </select>
-              </div>
+@media (max-width: 980px){
+  .app{grid-template-columns: 90px 1fr}
+  .navItem span:last-child{display:none}
+  .sbTitle{display:none}
+  .search{width:100%}
+  .grid4{grid-template-columns:repeat(2,1fr)}
+  .grid2{grid-template-columns:1fr}
+}
 
-              <div class="field2">
-                <label>Prioridade</label>
-                <select id="t_priority">
-                  <option value="baixa">Baixa</option>
-                  <option value="media" selected>Média</option>
-                  <option value="alta">Alta</option>
-                </select>
-              </div>
+.kpi{
+  background:rgba(18,20,28,.72);
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:22px;
+  box-shadow:0 20px 70px rgba(0,0,0,.35);
+  backdrop-filter: blur(14px);
+  padding:14px;
+}
+.kpi span{color:var(--muted);font-size:12px}
+.kpi b{display:block;margin-top:8px;font-size:22px}
 
-              <div class="field2 fieldFull">
-                <label>Descrição</label>
-                <textarea id="t_desc" rows="5" placeholder="Explique o problema com detalhes..."></textarea>
-              </div>
+.pillOk{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:6px 10px;border-radius:999px;
+  border:1px solid rgba(46,229,157,.40);
+  background:rgba(46,229,157,.10);
+  color:rgba(46,229,157,.95);
+  font-size:12px;
+}
 
-              <div class="field2 fieldFull">
-                <div class="consent">
-                  <span>🔒 Ao abrir este chamado, você autoriza o suporte a iniciar acesso remoto durante o atendimento.</span>
-                </div>
+.panelCard{
+  background:rgba(18,20,28,.72);
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:22px;
+  box-shadow:0 20px 70px rgba(0,0,0,.35);
+  backdrop-filter: blur(14px);
+  overflow:hidden;
+}
+.panelHead{
+  padding:12px 14px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+}
+.panelBody{padding:14px}
 
-                <button class="btn primary" id="btnCreateTicket">Enviar chamado</button>
-                <p class="msg" id="newTicketMsg"></p>
-              </div>
-            </div>
-          </section>
+.msgBox{
+  padding:12px 12px;
+  border-radius:18px;
+  background:rgba(0,0,0,.22);
+  border:1px solid rgba(255,255,255,.10);
+}
+.msgBox b{display:block;margin-bottom:6px}
 
-          <!-- MEUS CHAMADOS -->
-          <section class="page hidden" id="pageMyTickets">
-            <div class="pageTitleRow">
-              <h2>Meus chamados</h2>
+.formGrid{
+  display:grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap:12px;
+}
+.fieldFull{grid-column: 1 / -1}
 
-              <div class="tabs" id="ticketTabs">
-                <button class="tab active" data-filter="ALL">Todos</button>
-                <button class="tab" data-filter="ABERTO">Abertos</button>
-                <button class="tab" data-filter="ANDAMENTO">Andamento</button>
-                <button class="tab" data-filter="RESOLVIDO">Resolvidos</button>
-              </div>
-            </div>
+.filters{display:flex;gap:8px;flex-wrap:wrap}
+.chip{
+  padding:8px 10px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(0,0,0,.18);
+  color:rgba(255,255,255,.80);
+  font-weight:900;
+  cursor:pointer;
+}
+.chip.active{
+  background:rgba(106,75,201,.16);
+  border-color:rgba(106,75,201,.35);
+}
 
-            <div class="list" id="ticketList"></div>
-          </section>
+.ticketRow{
+  padding:12px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(0,0,0,.18);
+  display:flex;justify-content:space-between;gap:10px;
+  cursor:pointer;
+}
+.ticketRow:hover{border-color:rgba(106,75,201,.35)}
+.ticketMeta{display:flex;flex-direction:column;gap:4px}
+.ticketMeta b{font-size:13px}
+.badges{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.badge{
+  padding:6px 10px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.04);
+  font-size:12px;
+  color:rgba(255,255,255,.82);
+}
+.badge.open{border-color:rgba(255,194,61,.35);background:rgba(255,194,61,.10)}
+.badge.prog{border-color:rgba(62,186,255,.35);background:rgba(62,186,255,.10)}
+.badge.res{border-color:rgba(46,229,157,.35);background:rgba(46,229,157,.10)}
+.badge.remote{border-color:rgba(106,75,201,.35);background:rgba(106,75,201,.12)}
 
-          <!-- CHAMADOS EMPRESA (OPERADOR) -->
-          <section class="page hidden" id="pageCompanyTickets">
-            <div class="pageTitleRow">
-              <h2>Chamados da empresa</h2>
-              <span class="mutedMini">Operador</span>
-            </div>
-
-            <div class="list" id="companyTicketList"></div>
-          </section>
-
-          <!-- DEV -->
-          <section class="page hidden" id="pageDev">
-            <div class="pageTitleRow">
-              <h2>Painel DEV</h2>
-              <span class="mutedMini">Gerar chaves de empresa</span>
-            </div>
-
-            <div class="box">
-              <div class="boxHead">
-                <b>Gerar nova chave</b>
-                <span class="mutedMini">válida para cadastro</span>
-              </div>
-              <div class="boxBody">
-                <button class="btn primary" id="btnGenKey">Gerar chave</button>
-                <div class="keyOut" id="keyOut">—</div>
-                <p class="msg" id="devMsg"></p>
-              </div>
-            </div>
-          </section>
-
-          <!-- PERFIL -->
-          <section class="page hidden" id="pageProfile">
-            <div class="pageTitleRow">
-              <h2>Perfil</h2>
-              <span class="mutedMini">Informações da conta</span>
-            </div>
-
-            <div class="box">
-              <div class="boxHead">
-                <b>Minha conta</b>
-                <span class="mutedMini" id="profileRole">—</span>
-              </div>
-              <div class="boxBody">
-                <div class="kv"><span>Usuário</span><b id="pfUser">—</b></div>
-                <div class="kv"><span>Email</span><b id="pfEmail">—</b></div>
-                <div class="kv"><span>Empresa</span><b id="pfCompany">—</b></div>
-              </div>
-            </div>
-          </section>
-
-        </main>
-      </div>
-    </section>
-  </main>
-
-  <script src="/app.js" defer></script>
-</body>
-</html>
+.profileLine{margin:10px 0;color:rgba(255,255,255,.85)}
+.profileLine b{color:rgba(255,255,255,.95)}
