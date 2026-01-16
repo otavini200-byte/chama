@@ -1,11 +1,10 @@
 console.log("✅ app.js carregou");
 
-// ✅ API BASE (Render)
+// ✅ API BASE (Render) — funciona no GitHub Pages, file:// e Render
 const API_BASE =
   location.hostname.includes("github.io") || location.protocol === "file:"
     ? "https://chama-3fxc.onrender.com"
     : "";
-
 
 function $(id){ return document.getElementById(id); }
 
@@ -41,6 +40,7 @@ const State = {
   selectedTicketId: null
 };
 
+// ✅ API helper: sempre usa API_BASE + path
 async function api(path, opts = {}){
   const token = Storage.getToken();
   const headers = Object.assign(
@@ -48,7 +48,10 @@ async function api(path, opts = {}){
     opts.headers || {},
     token ? { "Authorization":"Bearer " + token } : {}
   );
-  const r = await fetch(path, Object.assign({}, opts, { headers }));
+
+  const url = (API_BASE ? API_BASE : "") + path;
+
+  const r = await fetch(url, Object.assign({}, opts, { headers }));
   const data = await r.json().catch(()=>({ ok:false, message:"Resposta inválida" }));
   return { ok: r.ok && data.ok !== false, status: r.status, data };
 }
@@ -125,9 +128,7 @@ async function bootMe(){
 
 async function loadTickets(){
   const res = await api("/api/tickets/my", { method:"GET" });
-  if(!res.ok){
-    return;
-  }
+  if(!res.ok) return;
   State.tickets = res.data.tickets || [];
   renderHome();
   renderTicketsList();
@@ -313,7 +314,6 @@ async function createTicket(){
   $("t_priority").value = "Média";
   $("t_category").value = "Sistema";
 
-  // vai pra lista e abre o detalhe do novo ticket
   await loadTickets();
   setActiveNav("myTickets");
   State.ticketFilter = "ALL";
@@ -343,7 +343,7 @@ const API_AUTH = {
     hint.style.color = "rgba(255,255,255,.42)";
 
     try{
-      const r = await fetch("/api/check-username", {
+      const r = await fetch(API_BASE + "/api/check-username", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ username: u })
@@ -374,7 +374,7 @@ const API_AUTH = {
     const role = $("su_role")?.value || "client";
 
     try{
-      const r = await fetch("/api/signup", {
+      const r = await fetch(API_BASE + "/api/signup", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ company_key, username, email, password, confirm, role })
@@ -415,7 +415,7 @@ const API_AUTH = {
     const remember = !!$("login_remember")?.checked;
 
     try{
-      const r = await fetch("/api/login", {
+      const r = await fetch(API_BASE + "/api/login", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ login, password })
@@ -446,7 +446,7 @@ const API_AUTH = {
     }
 
     try{
-      const r = await fetch("/api/forgot/send", {
+      const r = await fetch(API_BASE + "/api/forgot/send", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ email })
@@ -472,7 +472,6 @@ async function bootApp(){
   showApp();
   setActiveNav("home");
 
-  // carrega tickets e dashboard
   await loadTickets();
 }
 
@@ -545,4 +544,3 @@ document.addEventListener("DOMContentLoaded", async () => {
     await bootApp();
   }
 });
-
