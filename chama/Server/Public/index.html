@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Chama • Console</title>
+  <title>Chama • Acesso</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -21,18 +21,11 @@
         </div>
       </header>
 
-      <!-- TABS -->
-      <nav class="tabs">
-        <button class="tab active" id="tabLogin" onclick="UI.show('login')">Entrar</button>
-        <button class="tab" id="tabSignup" onclick="UI.show('signup')">Criar conta</button>
-        <button class="tab" id="tabForgot" onclick="UI.show('forgot')">Recuperar</button>
-      </nav>
-
-      <!-- LOGIN -->
+      <!-- LOGIN (TELA PRINCIPAL) -->
       <section id="screenLogin" class="screen">
         <div class="field">
           <label>Usuário ou Email</label>
-          <input id="login_login" placeholder="ex: otavio ou otavio@email.com" autocomplete="username" />
+          <input id="login_login" placeholder="ex: otavio ou otavini200@gmail.com" autocomplete="username" />
         </div>
 
         <div class="field">
@@ -49,17 +42,29 @@
             <span>Lembrar de mim</span>
           </label>
 
+          <!-- ✅ aqui vira o "Esqueci senha" (sem aba recuperar separada) -->
           <button class="linkBtn" onclick="UI.show('forgot')">Esqueci a senha</button>
         </div>
 
         <button class="btn primary" onclick="API.login()">Entrar</button>
         <p class="msg" id="login_msg"></p>
+
+        <!-- ✅ Botão Criar conta no final -->
+        <div class="bottomActions">
+          <span class="muted">Não tem conta?</span>
+          <button class="btn ghost" onclick="UI.show('signup')">Criar conta</button>
+        </div>
       </section>
 
       <!-- SIGNUP -->
       <section id="screenSignup" class="screen hidden">
+        <div class="screenTop">
+          <button class="btn ghost mini" onclick="UI.show('login')">← Voltar</button>
+          <span class="smallTop">Criar conta</span>
+        </div>
+
         <div class="pill">
-          <span>🔑 Chave da empresa só é usada aqui na criação.</span>
+          <span>🔑 A chave da empresa é usada só aqui na criação.</span>
         </div>
 
         <div class="field">
@@ -77,7 +82,7 @@
 
         <div class="field">
           <label>Email</label>
-          <input id="su_email" type="email" placeholder="otavio@email.com" />
+          <input id="su_email" type="email" placeholder="otavini200@gmail.com" />
         </div>
 
         <div class="field">
@@ -108,24 +113,27 @@
         <p class="msg" id="signup_msg"></p>
       </section>
 
-      <!-- FORGOT -->
+      <!-- FORGOT (ESQUECI A SENHA) -->
       <section id="screenForgot" class="screen hidden">
+        <div class="screenTop">
+          <button class="btn ghost mini" onclick="UI.show('login')">← Voltar</button>
+          <span class="smallTop">Recuperação</span>
+        </div>
+
         <div class="pill">
           <span>📩 Vamos mandar um link de recuperação no seu email.</span>
         </div>
 
         <div class="field">
           <label>Email</label>
-          <input id="fg_email" type="email" placeholder="otavio@email.com" />
+          <input id="fg_email" type="email" placeholder="otavini200@gmail.com" />
         </div>
 
         <button class="btn primary" onclick="API.forgot()">Enviar link</button>
         <p class="msg" id="forgot_msg"></p>
-
-        <button class="btn ghost" onclick="UI.show('login')">Voltar</button>
       </section>
 
-      <!-- DASHBOARD (após login) -->
+      <!-- DASHBOARD -->
       <section id="screenDash" class="screen hidden">
         <div class="dashTop">
           <div>
@@ -152,7 +160,7 @@
         <div class="divider"></div>
 
         <p class="small">
-          Próximo passo: painel do Operador listar PCs e Chamados (a gente faz já já).
+          ✅ Base pronta. Próximo passo: painel do operador + lista de clientes e chamados.
         </p>
       </section>
 
