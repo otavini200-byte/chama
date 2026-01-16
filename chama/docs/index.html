@@ -1,0 +1,65 @@
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+});
+
+self.addEventListener("fetch", (event) => {
+  // por enquanto vazio
+});
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Remote Desk • Console</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="bg"></div>
+
+  <main class="wrap">
+    <section class="card">
+      <div class="brand">
+        <div class="logo">RD</div>
+        <div>
+          <h1>Remote Desk</h1>
+          <p>Console do Técnico</p>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active">Entrar</button>
+        <button class="tab" disabled>SSO</button>
+      </div>
+
+      <label>Email</label>
+      <input id="email" type="email" placeholder="admin@local" />
+
+      <label>Senha</label>
+      <div class="pass">
+        <input id="password" type="password" placeholder="admin123" />
+        <button class="eye" id="toggle">👁</button>
+      </div>
+
+      <div class="row">
+        <label class="check">
+          <input id="remember" type="checkbox" checked />
+          <span>Lembrar login</span>
+        </label>
+        <a class="link" href="#" onclick="alert('Depois criamos recuperação!')">Esqueci</a>
+      </div>
+
+      <button class="btn" onclick="login()">Entrar</button>
+      <p id="msg" class="msg"></p>
+
+      <div id="app" class="app hidden">
+        <h2>✅ Logado</h2>
+        <p class="small">Agora seu console tá online no GitHub Pages.</p>
+        <button class="btn ghost" onclick="logout()">Sair</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
