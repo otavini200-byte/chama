@@ -246,5 +246,3 @@ input:focus,select:focus{
   background:rgba(46,229,157,.10);
   color:rgba(46,229,157,.95);
 }
-
-.small{color:var(--muted);font-size:12px}
