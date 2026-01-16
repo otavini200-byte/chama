@@ -1,4 +1,4 @@
-const SERVER = "http://localhost:3333";
+const SERVER = "https://chama-vf47.onrender.com/";
 const msg = document.getElementById("msg");
 
 document.getElementById("toggle").addEventListener("click", (e) => {
@@ -34,3 +34,4 @@ async function login(){
     msg.textContent = "❌ Servidor offline (confere se o server está rodando).";
   }
 }
+
