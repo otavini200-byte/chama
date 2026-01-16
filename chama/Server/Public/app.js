@@ -1,19 +1,28 @@
-window.UI = {
-  show(screenId){
-    const screens = ["screenLogin","screenSignup","screenForgot","screenDash"];
-    screens.forEach(id => document.getElementById(id).classList.add("hidden"));
-    document.getElementById(screenId).classList.remove("hidden");
-  },
+console.log("✅ app.js carregou");
 
-  togglePass(id){
+function hideAllScreens(){
+  ["screenLogin","screenSignup","screenForgot","screenDash"].forEach(id => {
     const el = document.getElementById(id);
-    el.type = el.type === "password" ? "text" : "password";
-  },
+    if(el) el.classList.add("hidden");
+  });
+}
 
-  setMsg(id, text){
-    document.getElementById(id).textContent = text || "";
-  }
-};
+function showScreen(id){
+  hideAllScreens();
+  const el = document.getElementById(id);
+  if(el) el.classList.remove("hidden");
+}
+
+function togglePass(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.type = el.type === "password" ? "text" : "password";
+}
+
+function setMsg(id, text){
+  const el = document.getElementById(id);
+  if(el) el.textContent = text || "";
+}
 
 const Storage = {
   setToken(token, remember){
@@ -29,10 +38,11 @@ const Storage = {
   }
 };
 
-window.API = {
+const API = {
   async checkUsername(){
-    const u = document.getElementById("su_user").value.trim().toLowerCase();
+    const u = (document.getElementById("su_user")?.value || "").trim().toLowerCase();
     const hint = document.getElementById("su_hint");
+    if(!hint) return;
 
     if(!u){
       hint.textContent = "Digite para verificar…";
@@ -51,7 +61,6 @@ window.API = {
       });
 
       const data = await r.json();
-
       if(data.ok && data.available){
         hint.textContent = "disponível ✅";
         hint.style.color = "rgba(46,229,157,.95)";
@@ -66,14 +75,14 @@ window.API = {
   },
 
   async signup(){
-    UI.setMsg("signup_msg", "Criando conta...");
+    setMsg("signup_msg", "Criando conta...");
 
-    const company_key = document.getElementById("su_key").value.trim();
-    const username = document.getElementById("su_user").value.trim().toLowerCase();
-    const email = document.getElementById("su_email").value.trim().toLowerCase();
-    const password = document.getElementById("su_pass").value;
-    const confirm = document.getElementById("su_confirm").value;
-    const role = document.getElementById("su_role").value;
+    const company_key = (document.getElementById("su_key")?.value || "").trim();
+    const username = (document.getElementById("su_user")?.value || "").trim().toLowerCase();
+    const email = (document.getElementById("su_email")?.value || "").trim().toLowerCase();
+    const password = document.getElementById("su_pass")?.value || "";
+    const confirm = document.getElementById("su_confirm")?.value || "";
+    const role = document.getElementById("su_role")?.value || "client";
 
     try{
       const r = await fetch("/api/signup", {
@@ -83,36 +92,38 @@ window.API = {
       });
 
       const data = await r.json();
-
       if(!data.ok){
-        UI.setMsg("signup_msg", "❌ " + (data.message || "Falha ao criar conta"));
+        setMsg("signup_msg", "❌ " + (data.message || "Falha ao criar conta"));
         return;
       }
 
-      UI.setMsg("signup_msg", "✅ Conta criada! Voltando pro login...");
+      setMsg("signup_msg", "✅ Conta criada! Voltando pro login...");
 
       setTimeout(()=>{
-        document.getElementById("su_key").value = "";
-        document.getElementById("su_user").value = "";
-        document.getElementById("su_email").value = "";
-        document.getElementById("su_pass").value = "";
-        document.getElementById("su_confirm").value = "";
-        document.getElementById("su_hint").textContent = "Digite para verificar…";
-        UI.setMsg("signup_msg","");
-        UI.show("screenLogin");
+        ["su_key","su_user","su_email","su_pass","su_confirm"].forEach(id=>{
+          const el = document.getElementById(id);
+          if(el) el.value = "";
+        });
+        const hint = document.getElementById("su_hint");
+        if(hint){
+          hint.textContent = "Digite para verificar…";
+          hint.style.color = "rgba(255,255,255,.42)";
+        }
+        setMsg("signup_msg","");
+        showScreen("screenLogin");
       }, 900);
 
     }catch{
-      UI.setMsg("signup_msg", "❌ Servidor offline");
+      setMsg("signup_msg", "❌ Servidor offline");
     }
   },
 
   async login(){
-    UI.setMsg("login_msg", "Conectando...");
+    setMsg("login_msg", "Conectando...");
 
-    const login = document.getElementById("login_login").value.trim().toLowerCase();
-    const password = document.getElementById("login_pass").value;
-    const remember = document.getElementById("login_remember").checked;
+    const login = (document.getElementById("login_login")?.value || "").trim().toLowerCase();
+    const password = document.getElementById("login_pass")?.value || "";
+    const remember = !!document.getElementById("login_remember")?.checked;
 
     try{
       const r = await fetch("/api/login", {
@@ -122,46 +133,44 @@ window.API = {
       });
 
       const data = await r.json();
-
       if(!data.ok){
-        UI.setMsg("login_msg", "❌ " + (data.message || "Falha no login"));
+        setMsg("login_msg", "❌ " + (data.message || "Falha no login"));
         return;
       }
 
       Storage.setToken(data.token, remember);
-      UI.setMsg("login_msg", "✅ Login OK!");
+      setMsg("login_msg", "✅ Login OK!");
       await API.bootDash();
 
     }catch{
-      UI.setMsg("login_msg", "❌ Servidor offline");
+      setMsg("login_msg", "❌ Servidor offline");
     }
   },
 
   async bootDash(){
-    UI.show("screenDash");
+    showScreen("screenDash");
     const token = Storage.getToken();
 
     try{
       const r = await fetch("/api/me", {
         headers:{ "Authorization":"Bearer " + token }
       });
-      const data = await r.json();
 
+      const data = await r.json();
       if(!data.ok){
         Storage.clear();
-        UI.show("screenLogin");
+        showScreen("screenLogin");
         return;
       }
 
-      document.getElementById("dash_me").textContent =
-        `${data.payload.username} • ${data.payload.email}`;
+      const me = document.getElementById("dash_me");
+      const role = document.getElementById("dash_role");
 
-      document.getElementById("dash_role").textContent =
-        (data.payload.role === "operator" ? "Operador" : "Cliente");
-
+      if(me) me.textContent = `${data.payload.username} • ${data.payload.email}`;
+      if(role) role.textContent = (data.payload.role === "operator" ? "Operador" : "Cliente");
     }catch{
       Storage.clear();
-      UI.show("screenLogin");
+      showScreen("screenLogin");
     }
   },
 
@@ -171,11 +180,11 @@ window.API = {
   },
 
   async forgot(){
-    UI.setMsg("forgot_msg", "Enviando...");
+    setMsg("forgot_msg", "Enviando...");
 
-    const email = document.getElementById("fg_email").value.trim().toLowerCase();
+    const email = (document.getElementById("fg_email")?.value || "").trim().toLowerCase();
     if(!email){
-      UI.setMsg("forgot_msg","❌ Digite seu email.");
+      setMsg("forgot_msg","❌ Digite seu email.");
       return;
     }
 
@@ -188,22 +197,43 @@ window.API = {
 
       const data = await r.json();
       if(!data.ok){
-        UI.setMsg("forgot_msg","❌ " + (data.message || "Falha ao enviar"));
+        setMsg("forgot_msg","❌ " + (data.message || "Falha ao enviar"));
         return;
       }
 
-      UI.setMsg("forgot_msg","✅ Link enviado pro seu email! (confere a caixa de entrada)");
+      setMsg("forgot_msg","✅ Link enviado pro seu email! Verifique a caixa de entrada.");
     }catch{
-      UI.setMsg("forgot_msg","❌ Servidor offline");
+      setMsg("forgot_msg","❌ Servidor offline");
     }
   }
 };
 
-// ✅ tela inicial
-UI.show("screenLogin");
+// ✅ inicia quando o html carregar
+document.addEventListener("DOMContentLoaded", () => {
+  // navegação
+  document.getElementById("btnGoSignup")?.addEventListener("click", () => showScreen("screenSignup"));
+  document.getElementById("btnForgot")?.addEventListener("click", () => showScreen("screenForgot"));
+  document.getElementById("btnBackFromSignup")?.addEventListener("click", () => showScreen("screenLogin"));
+  document.getElementById("btnBackFromForgot")?.addEventListener("click", () => showScreen("screenLogin"));
 
-// ✅ auto-login se já tiver token
-(function(){
+  // ações
+  document.getElementById("btnLogin")?.addEventListener("click", API.login);
+  document.getElementById("btnSignup")?.addEventListener("click", API.signup);
+  document.getElementById("btnSendForgot")?.addEventListener("click", API.forgot);
+  document.getElementById("btnLogout")?.addEventListener("click", API.logout);
+
+  // olhos
+  document.getElementById("btnEyeLogin")?.addEventListener("click", (e) => { e.preventDefault(); togglePass("login_pass"); });
+  document.getElementById("btnEyeSuPass")?.addEventListener("click", (e) => { e.preventDefault(); togglePass("su_pass"); });
+  document.getElementById("btnEyeSuConfirm")?.addEventListener("click", (e) => { e.preventDefault(); togglePass("su_confirm"); });
+
+  // verificar username ao digitar
+  document.getElementById("su_user")?.addEventListener("input", API.checkUsername);
+
+  // tela inicial
+  showScreen("screenLogin");
+
+  // auto-login
   const t = Storage.getToken();
   if(t) API.bootDash();
-})();
+});
