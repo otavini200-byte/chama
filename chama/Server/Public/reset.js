@@ -1,71 +1,60 @@
-function qs(name){
+function setMsg(text){
+  document.getElementById("reset_msg").textContent = text || "";
+}
+
+function getToken(){
   const url = new URL(location.href);
-  return url.searchParams.get(name) || "";
+  return url.searchParams.get("token") || "";
 }
 
-function togglePass(id){
-  const el = document.getElementById(id);
-  el.type = el.type === "password" ? "text" : "password";
+async function verifyToken(token){
+  const r = await fetch("/api/reset/verify?token=" + encodeURIComponent(token));
+  return await r.json();
 }
 
-function setPill(text, ok=true){
-  const pill = document.getElementById("statePill");
-  pill.textContent = text;
-  pill.style.borderColor = ok ? "rgba(46,229,157,.40)" : "rgba(255,75,146,.40)";
-  pill.style.background = ok ? "rgba(46,229,157,.10)" : "rgba(255,75,146,.10)";
+async function confirmReset(token, password, confirm){
+  const r = await fetch("/api/reset/confirm", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ token, password, confirm })
+  });
+  return await r.json();
 }
 
-async function verify(){
-  const token = qs("token");
+document.addEventListener("DOMContentLoaded", async () => {
+  const token = getToken();
   if(!token){
-    setPill("Token inválido ❌", false);
+    setMsg("❌ Token inválido.");
     return;
   }
 
   try{
-    const r = await fetch(`/api/reset/verify?token=${encodeURIComponent(token)}`);
-    const data = await r.json();
-    if(!data.ok){
-      setPill("Token inválido ou expirado ❌", false);
+    const v = await verifyToken(token);
+    if(!v.ok){
+      setMsg("❌ Token inválido/expirado.");
       return;
     }
-    setPill("Token OK ✅ Agora crie sua nova senha", true);
+    setMsg("✅ Token válido. Digite a nova senha.");
   }catch{
-    setPill("Servidor offline ❌", false);
+    setMsg("❌ Servidor offline.");
+    return;
   }
-}
 
-async function confirmReset(){
-  const token = qs("token");
-  const password = document.getElementById("r_pass").value;
-  const confirm = document.getElementById("r_confirm").value;
+  document.getElementById("btnReset").addEventListener("click", async () => {
+    const pass = document.getElementById("rp_pass").value || "";
+    const conf = document.getElementById("rp_confirm").value || "";
 
-  const msg = document.getElementById("r_msg");
-  msg.textContent = "Salvando...";
+    setMsg("Atualizando...");
 
-  try{
-    const r = await fetch("/api/reset/confirm", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ token, password, confirm })
-    });
-
-    const data = await r.json();
-    if(!data.ok){
-      msg.textContent = "❌ " + (data.message || "Falha");
-      return;
+    try{
+      const data = await confirmReset(token, pass, conf);
+      if(!data.ok){
+        setMsg("❌ " + (data.message || "Erro."));
+        return;
+      }
+      setMsg("✅ Senha atualizada! Pode voltar pro login.");
+    }catch{
+      setMsg("❌ Servidor offline.");
     }
-
-    msg.textContent = "✅ Senha atualizada! Voltando pro login...";
-    setTimeout(()=>location.href="/", 1000);
-
-  }catch{
-    msg.textContent = "❌ Servidor offline";
-  }
-}
-
-function goHome(){
-  location.href="/";
-}
-
-verify();
+  });
+});
