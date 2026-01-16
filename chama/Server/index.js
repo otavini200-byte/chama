@@ -637,9 +637,118 @@ app.post("/api/remote/:ticketId/start", auth, operatorOnly, (req, res) => {
     );
   });
 });
+// ✅ DEV ONLY middleware
+function devOnly(req, res, next) {
+  if (!req.user || req.user.role !== "dev") {
+    return res.status(403).json({ ok: false, message: "Acesso DEV somente." });
+  }
+  next();
+}
+
+function genCompanyKey(len = 10) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+// ✅ DEV - Lista todas empresas + contadores
+app.get("/api/dev/companies", auth, devOnly, (req, res) => {
+  const q = `
+    SELECT
+      c.id,
+      c.company_key,
+      c.created_at,
+
+      -- usuários
+      (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id) as users_total,
+      (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id AND u.role = 'client') as users_clients,
+      (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id AND u.role = 'operator') as users_operators,
+
+      -- tickets
+      (SELECT COUNT(*) FROM tickets t WHERE t.company_id = c.id) as tickets_total,
+      (SELECT COUNT(*) FROM tickets t WHERE t.company_id = c.id AND t.status = 'OPEN') as tickets_open,
+      (SELECT COUNT(*) FROM tickets t WHERE t.company_id = c.id AND t.status = 'IN_PROGRESS') as tickets_progress,
+      (SELECT COUNT(*) FROM tickets t WHERE t.company_id = c.id AND t.status = 'RESOLVED') as tickets_resolved
+    FROM companies c
+    ORDER BY c.created_at DESC
+  `;
+
+  db.all(q, [], (err, rows) => {
+    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
+    return res.json({ ok: true, companies: rows || [] });
+  });
+});
+
+// ✅ DEV - Criar empresa + chave
+app.post("/api/dev/companies/create", auth, devOnly, (req, res) => {
+  let key = String(req.body?.company_key || "").trim().toUpperCase();
+  if (!key) key = genCompanyKey(10);
+
+  const created = Date.now();
+  db.run(
+    `INSERT INTO companies (company_key, created_at) VALUES (?,?)`,
+    [key, created],
+    function (err) {
+      if (err) {
+        const msg = String(err.message || "");
+        if (msg.includes("UNIQUE")) {
+          return res.status(409).json({ ok: false, message: "Chave já existe, tente outra." });
+        }
+        return res.status(500).json({ ok: false, message: "Erro ao criar empresa." });
+      }
+
+      return res.json({
+        ok: true,
+        message: "✅ Empresa criada!",
+        company: { id: this.lastID, company_key: key, created_at: created }
+      });
+    }
+  );
+});
+
+// ✅ DEV - Ver usuários de uma empresa
+app.get("/api/dev/companies/:id/users", auth, devOnly, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  db.all(
+    `SELECT id, username, email, role, created_at
+     FROM users
+     WHERE company_id = ?
+     ORDER BY created_at DESC`,
+    [id],
+    (err, rows) => {
+      if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
+      return res.json({ ok: true, users: rows || [] });
+    }
+  );
+});
+
+// ✅ DEV - Ver chamados de uma empresa
+app.get("/api/dev/companies/:id/tickets", auth, devOnly, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  db.all(
+    `
+    SELECT t.*,
+      c.username as client_username,
+      op.username as operator_username
+    FROM tickets t
+    LEFT JOIN users c ON c.id = t.user_id
+    LEFT JOIN users op ON op.id = t.assigned_operator_id
+    WHERE t.company_id = ?
+    ORDER BY t.created_at DESC
+    LIMIT 200
+    `,
+    [id],
+    (err, rows) => {
+      if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
+      return res.json({ ok: true, tickets: rows || [] });
+    }
+  );
+});
 
 const PORT = process.env.PORT || 3333;
 app.listen(PORT, "0.0.0.0", () => {
   console.log("✅ Server ON na porta " + PORT);
   seedDevAccount();
 });
+
