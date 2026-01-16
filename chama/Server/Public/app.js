@@ -2,23 +2,15 @@ console.log("✅ app.js carregou");
 
 function $(id){ return document.getElementById(id); }
 
-function hideAuthScreens(){
-  ["screenLogin","screenSignup","screenForgot"].forEach(id => $(id)?.classList.add("hidden"));
-}
-function showAuthScreen(id){
-  ["screenLogin","screenSignup","screenForgot"].forEach(x => $(x)?.classList.add("hidden"));
-  $(id)?.classList.remove("hidden");
+function setMsg(id, text){
+  const el = $(id);
+  if(el) el.textContent = text || "";
 }
 
 function togglePass(id){
   const el = $(id);
   if(!el) return;
   el.type = el.type === "password" ? "text" : "password";
-}
-
-function setMsg(id, text){
-  const el = $(id);
-  if(el) el.textContent = text || "";
 }
 
 const Storage = {
@@ -35,330 +27,301 @@ const Storage = {
   }
 };
 
-async function api(path, options = {}){
-  const token = Storage.getToken();
-  const headers = options.headers || {};
-  headers["Content-Type"] = "application/json";
-  if(token) headers["Authorization"] = "Bearer " + token;
-
-  const res = await fetch(path, { ...options, headers });
-  const data = await res.json().catch(() => ({}));
-  return { ok: res.ok && data.ok !== false, res, data };
-}
-
-// ===== APP STATE =====
 const State = {
   me: null,
-  role: "client",
-  filter: "ALL",
-  myTickets: [],
-  companyTickets: []
+  tickets: [],
+  ticketFilter: "ALL",
+  selectedTicketId: null
 };
 
-function setActiveNav(key){
-  document.querySelectorAll(".sbItem").forEach(el => {
-    el.classList.toggle("active", el.dataset.key === key);
-  });
-}
-
-function hidePages(){
-  ["pageDashboard","pageNewTicket","pageMyTickets","pageCompanyTickets","pageDev","pageProfile"].forEach(id => {
-    $(id)?.classList.add("hidden");
-  });
-}
-
-function showPage(id){
-  hidePages();
-  $(id)?.classList.remove("hidden");
-}
-
-function buildSidebar(){
-  const nav = $("sbNav");
-  nav.innerHTML = "";
-
-  const base = [
-    { key:"dash", icon:"🏠", text:"Início", page:"pageDashboard" },
-    { key:"new", icon:"➕", text:"Abrir chamado", page:"pageNewTicket", roles:["client","operator"] },
-    { key:"my", icon:"🎫", text:"Meus chamados", page:"pageMyTickets", roles:["client","operator"] },
-    { key:"company", icon:"🏢", text:"Chamados da empresa", page:"pageCompanyTickets", roles:["operator"] },
-    { key:"dev", icon:"🧪", text:"DEV", page:"pageDev", roles:["dev"] },
-    { key:"profile", icon:"👤", text:"Perfil", page:"pageProfile" },
-  ];
-
-  const items = base.filter(i => !i.roles || i.roles.includes(State.role));
-
-  items.forEach(item => {
-    const btn = document.createElement("div");
-    btn.className = "sbItem";
-    btn.dataset.key = item.key;
-
-    btn.innerHTML = `
-      <div class="sbIcon">${item.icon}</div>
-      <div class="sbText">${item.text}</div>
-    `;
-
-    btn.addEventListener("click", async () => {
-      setActiveNav(item.key);
-      showPage(item.page);
-
-      if(item.key === "my") await loadMyTickets();
-      if(item.key === "company") await loadCompanyTickets();
-      if(item.key === "dash") await refreshDashboard();
-      if(item.key === "profile") fillProfile();
-    });
-
-    nav.appendChild(btn);
-  });
-
-  // ativa dash por padrão
-  setActiveNav("dash");
-}
-
-function showApp(){
-  $("authCard")?.classList.add("hidden");
-  $("appShell")?.classList.remove("hidden");
+async function api(path, opts = {}){
+  const token = Storage.getToken();
+  const headers = Object.assign(
+    { "Content-Type":"application/json" },
+    opts.headers || {},
+    token ? { "Authorization":"Bearer " + token } : {}
+  );
+  const r = await fetch(path, Object.assign({}, opts, { headers }));
+  const data = await r.json().catch(()=>({ ok:false, message:"Resposta inválida" }));
+  return { ok: r.ok && data.ok !== false, status: r.status, data };
 }
 
 function showAuth(){
-  $("appShell")?.classList.add("hidden");
-  $("authCard")?.classList.remove("hidden");
-  showAuthScreen("screenLogin");
+  $("authWrap")?.classList.remove("hidden");
+  $("appWrap")?.classList.add("hidden");
+}
+function showApp(){
+  $("authWrap")?.classList.add("hidden");
+  $("appWrap")?.classList.remove("hidden");
 }
 
-function badgeStatus(status){
-  if(status === "ABERTO") return `<span class="badge open">ABERTO</span>`;
-  if(status === "ANDAMENTO") return `<span class="badge doing">ANDAMENTO</span>`;
-  if(status === "RESOLVIDO") return `<span class="badge done">RESOLVIDO</span>`;
-  return `<span class="badge">${status}</span>`;
+function hideAuthScreens(){
+  ["screenLogin","screenSignup","screenForgot"].forEach(id => $(id)?.classList.add("hidden"));
 }
-function badgePriority(p){
-  const v = String(p || "").toLowerCase();
-  if(v === "alta") return `<span class="badge open">ALTA</span>`;
-  if(v === "media") return `<span class="badge doing">MÉDIA</span>`;
-  return `<span class="badge done">BAIXA</span>`;
-}
-function badgeRemote(remote_status){
-  const s = remote_status || "allowed";
-  if(s === "allowed") return `<span class="badge remote">REMOTO: PERMITIDO</span>`;
-  if(s === "active") return `<span class="badge remote">REMOTO: ATIVO</span>`;
-  return `<span class="badge remote">REMOTO: ENCERRADO</span>`;
+function showAuthScreen(id){
+  hideAuthScreens();
+  $(id)?.classList.remove("hidden");
 }
 
-function formatDate(ms){
-  const d = new Date(ms);
-  return d.toLocaleString("pt-BR");
+function setActiveNav(page){
+  document.querySelectorAll(".navItem").forEach(b => {
+    b.classList.toggle("active", b.dataset.page === page);
+  });
+  document.querySelectorAll(".page").forEach(p => p.classList.add("hidden"));
+  $("page_" + page)?.classList.remove("hidden");
 }
 
-// ===== DATA LOADERS =====
-async function loadMe(){
-  const r = await api("/api/me", { method:"GET" });
-  if(!r.ok){
+function statusBadge(status){
+  if(status === "OPEN") return `<span class="badge open">Aberto</span>`;
+  if(status === "IN_PROGRESS") return `<span class="badge prog">Andamento</span>`;
+  if(status === "RESOLVED") return `<span class="badge res">Resolvido</span>`;
+  return `<span class="badge">—</span>`;
+}
+function remoteBadge(rs){
+  if(rs === "ALLOWED") return `<span class="badge remote">Remoto: Permitido</span>`;
+  if(rs === "ACTIVE") return `<span class="badge remote">Remoto: Ativo</span>`;
+  if(rs === "CLOSED") return `<span class="badge remote">Remoto: Encerrado</span>`;
+  return `<span class="badge remote">Remoto: —</span>`;
+}
+function fmtDate(ms){
+  try{
+    const d = new Date(ms);
+    return d.toLocaleString("pt-BR");
+  }catch{ return "—"; }
+}
+
+async function bootMe(){
+  const res = await api("/api/me", { method:"GET" });
+  if(!res.ok){
     Storage.clear();
-    return null;
+    showAuth();
+    showAuthScreen("screenLogin");
+    return false;
   }
-  return r.data.payload;
+  State.me = res.data.payload;
+
+  // topo/sidebar
+  $("sbSub").textContent = State.me.role === "dev" ? "DEV" : (State.me.role === "operator" ? "Operador" : "Cliente");
+  $("sbUserName").textContent = State.me.username;
+  $("sbUserEmail").textContent = State.me.email;
+  $("helloName").textContent = "Olá, " + State.me.username;
+  $("helloSub").textContent = State.me.role === "client" ? "Painel do Cliente" : "Painel";
+
+  // perfil
+  $("p_user").textContent = State.me.username;
+  $("p_email").textContent = State.me.email;
+  $("p_role").textContent = State.me.role;
+  $("p_company").textContent = State.me.company_key || "—";
+
+  return true;
 }
 
-function countsFromTickets(list){
-  const c = { ABERTO:0, ANDAMENTO:0, RESOLVIDO:0 };
-  list.forEach(t => { if(c[t.status] !== undefined) c[t.status]++; });
-  return c;
-}
-
-async function refreshDashboard(){
-  // pega dados do tipo de usuário
-  if(State.role === "operator"){
-    await loadCompanyTickets();
-    const c = countsFromTickets(State.companyTickets);
-    $("stOpen").textContent = c.ABERTO;
-    $("stDoing").textContent = c.ANDAMENTO;
-    $("stDone").textContent = c.RESOLVIDO;
-
-    const last = State.companyTickets[0];
-    if(last){
-      $("lastTicketSub").textContent = `#${last.id} • ${formatDate(last.created_at)}`;
-      $("lastTicketBox").innerHTML = `
-        <b>${last.title}</b>
-        <div class="sub">${last.requester || "—"} • ${last.category}</div>
-        <div class="sub">${badgeStatus(last.status)} ${badgePriority(last.priority)} ${badgeRemote(last.remote_status)}</div>
-      `;
-    }else{
-      $("lastTicketSub").textContent = "—";
-      $("lastTicketBox").innerHTML = `<span class="mutedMini">Nenhum chamado ainda.</span>`;
-    }
+async function loadTickets(){
+  const res = await api("/api/tickets/my", { method:"GET" });
+  if(!res.ok){
     return;
   }
-
-  await loadMyTickets();
-  const c = countsFromTickets(State.myTickets);
-  $("stOpen").textContent = c.ABERTO;
-  $("stDoing").textContent = c.ANDAMENTO;
-  $("stDone").textContent = c.RESOLVIDO;
-
-  const last = State.myTickets[0];
-  if(last){
-    $("lastTicketSub").textContent = `#${last.id} • ${formatDate(last.created_at)}`;
-    $("lastTicketBox").innerHTML = `
-      <b>${last.title}</b>
-      <div class="sub">${last.category}</div>
-      <div class="sub">${badgeStatus(last.status)} ${badgePriority(last.priority)} ${badgeRemote(last.remote_status)}</div>
-    `;
-  }else{
-    $("lastTicketSub").textContent = "—";
-    $("lastTicketBox").innerHTML = `<span class="mutedMini">Nenhum chamado ainda.</span>`;
-  }
-}
-
-async function loadMyTickets(){
-  const r = await api("/api/tickets/my", { method:"GET" });
-  if(!r.ok){
-    $("ticketList").innerHTML = `<div class="pillSoft">Erro ao buscar chamados.</div>`;
-    return;
-  }
-  State.myTickets = r.data.tickets || [];
-  renderTicketList(State.myTickets, $("ticketList"));
-}
-
-async function loadCompanyTickets(){
-  const r = await api("/api/tickets/company", { method:"GET" });
-  if(!r.ok){
-    $("companyTicketList").innerHTML = `<div class="pillSoft">Erro ao buscar chamados.</div>`;
-    return;
-  }
-  State.companyTickets = r.data.tickets || [];
-  renderCompanyTicketList(State.companyTickets, $("companyTicketList"));
+  State.tickets = res.data.tickets || [];
+  renderHome();
+  renderTicketsList();
 }
 
 function applyFilter(list){
-  const f = State.filter;
-  if(f === "ALL") return list;
-
-  return list.filter(t => t.status === f);
+  if(State.ticketFilter === "ALL") return list;
+  return list.filter(t => t.status === State.ticketFilter);
 }
 
-function applySearch(list){
-  const q = ($("searchInput")?.value || "").trim().toLowerCase();
-  if(!q) return list;
+function renderHome(){
+  const tickets = State.tickets.slice();
+  const open = tickets.filter(t => t.status === "OPEN").length;
+  const prog = tickets.filter(t => t.status === "IN_PROGRESS").length;
+  const res = tickets.filter(t => t.status === "RESOLVED").length;
 
-  return list.filter(t =>
-    String(t.title || "").toLowerCase().includes(q) ||
-    String(t.category || "").toLowerCase().includes(q) ||
-    String(t.description || "").toLowerCase().includes(q) ||
-    String(t.id || "").includes(q)
-  );
+  $("kpi_open").textContent = String(open);
+  $("kpi_prog").textContent = String(prog);
+  $("kpi_res").textContent = String(res);
+
+  if(tickets.length){
+    const t = tickets[0];
+    $("lastTicketMeta").textContent = `#${t.id} • ${fmtDate(t.created_at)}`;
+    $("lastTicketBody").innerHTML = `
+      <div class="msgBox">
+        <b>${escapeHtml(t.title)}</b>
+        <div class="badges" style="margin-top:8px">
+          ${statusBadge(t.status)}
+          ${remoteBadge(t.remote_status)}
+          <span class="badge">${escapeHtml(t.priority || "")}</span>
+          <span class="badge">${escapeHtml(t.category || "")}</span>
+        </div>
+        <div style="margin-top:10px;color:rgba(255,255,255,.78);font-size:12px;line-height:1.35">
+          ${escapeHtml((t.description||"").slice(0, 220))}${(t.description||"").length>220?"…":""}
+        </div>
+      </div>
+    `;
+  }else{
+    $("lastTicketMeta").textContent = "—";
+    $("lastTicketBody").innerHTML = `<span class="mutedSmall">Nenhum chamado ainda.</span>`;
+  }
 }
 
-function renderTicketList(list, el){
-  const filtered = applySearch(applyFilter(list));
+function renderTicketsList(){
+  const box = $("ticketsList");
+  const listAll = State.tickets.slice();
+  const list = applyFilter(listAll);
+
+  $("ticketsCount").textContent = `${list.length} chamado(s)`;
+
+  const q = ($("globalSearch")?.value || "").trim().toLowerCase();
+  const filtered = q
+    ? list.filter(t => (t.title||"").toLowerCase().includes(q) || String(t.id).includes(q))
+    : list;
+
   if(!filtered.length){
-    el.innerHTML = `<div class="pillSoft">Nenhum chamado encontrado.</div>`;
+    box.innerHTML = `<div class="panelBody"><span class="mutedSmall">Nenhum chamado encontrado.</span></div>`;
     return;
   }
 
-  el.innerHTML = filtered.map(t => `
-    <div class="ticket">
-      <div>
-        <b>#${t.id} • ${t.title}</b>
-        <div class="sub">${t.category} • ${formatDate(t.created_at)}</div>
-        <div class="sub">Acesso remoto já permitido neste chamado ✅</div>
+  const html = filtered.map(t => {
+    return `
+      <div class="ticketRow" data-id="${t.id}">
+        <div class="ticketMeta">
+          <b>#${t.id} • ${escapeHtml(t.title)}</b>
+          <span class="mutedSmall">${escapeHtml(t.category)} • ${escapeHtml(t.priority)} • ${fmtDate(t.updated_at)}</span>
+        </div>
+        <div class="badges">
+          ${statusBadge(t.status)}
+          ${remoteBadge(t.remote_status)}
+        </div>
       </div>
-      <div class="badges">
-        ${badgeStatus(t.status)}
-        ${badgePriority(t.priority)}
-        ${badgeRemote(t.remote_status)}
-      </div>
-    </div>
-  `).join("");
+    `;
+  }).join("");
+
+  box.innerHTML = `<div class="panelBody" style="display:flex;flex-direction:column;gap:10px">${html}</div>`;
+
+  box.querySelectorAll(".ticketRow").forEach(row => {
+    row.addEventListener("click", async () => {
+      const id = parseInt(row.dataset.id, 10);
+      State.selectedTicketId = id;
+      await renderTicketDetail(id);
+    });
+  });
 }
 
-function renderCompanyTicketList(list, el){
-  const filtered = applySearch(list);
-  if(!filtered.length){
-    el.innerHTML = `<div class="pillSoft">Nenhum chamado encontrado.</div>`;
+async function renderTicketDetail(id){
+  const box = $("ticketDetail");
+  box.innerHTML = `
+    <div class="panelHead">
+      <b>Detalhes</b>
+      <span class="mutedSmall">Carregando…</span>
+    </div>
+    <div class="panelBody"><span class="mutedSmall">Buscando informações…</span></div>
+  `;
+
+  const res = await api("/api/tickets/" + id, { method:"GET" });
+  if(!res.ok){
+    box.innerHTML = `
+      <div class="panelHead"><b>Detalhes</b><span class="mutedSmall">Erro</span></div>
+      <div class="panelBody"><span class="mutedSmall">Não foi possível carregar.</span></div>
+    `;
     return;
   }
+  const t = res.data.ticket;
 
-  el.innerHTML = filtered.map(t => `
-    <div class="ticket">
-      <div>
-        <b>#${t.id} • ${t.title}</b>
-        <div class="sub">${t.requester || "—"} • ${t.category} • ${formatDate(t.created_at)}</div>
-        <div class="sub">${t.requester_email || ""}</div>
-      </div>
-      <div class="badges">
-        ${badgeStatus(t.status)}
-        ${badgePriority(t.priority)}
-        ${badgeRemote(t.remote_status)}
-      </div>
+  const canCloseRemote = (t.remote_status !== "CLOSED");
+  const closeBtn = canCloseRemote
+    ? `<button class="btn ghost" id="btnCloseRemote">Encerrar acesso remoto</button>`
+    : `<button class="btn ghost" disabled>Remoto encerrado</button>`;
+
+  box.innerHTML = `
+    <div class="panelHead">
+      <b>#${t.id}</b>
+      <span class="mutedSmall">${fmtDate(t.created_at)}</span>
     </div>
-  `).join("");
+    <div class="panelBody">
+      <div class="msgBox">
+        <b>${escapeHtml(t.title)}</b>
+        <div class="badges" style="margin-top:10px">
+          ${statusBadge(t.status)}
+          ${remoteBadge(t.remote_status)}
+          <span class="badge">${escapeHtml(t.priority)}</span>
+          <span class="badge">${escapeHtml(t.category)}</span>
+        </div>
+        <div style="margin-top:10px;color:rgba(255,255,255,.78);font-size:12px;line-height:1.35">
+          ${escapeHtml(t.description)}
+        </div>
+      </div>
+
+      <p class="msg" id="detail_msg"></p>
+      ${closeBtn}
+    </div>
+  `;
+
+  const btn = $("btnCloseRemote");
+  if(btn){
+    btn.addEventListener("click", async () => {
+      $("detail_msg").textContent = "Encerrando...";
+      const r2 = await api("/api/remote/" + t.id + "/close", { method:"POST", body: "{}" });
+      if(!r2.ok){
+        $("detail_msg").textContent = "❌ Falha ao encerrar.";
+        return;
+      }
+      $("detail_msg").textContent = "✅ Acesso remoto encerrado.";
+      await loadTickets();
+      await renderTicketDetail(t.id);
+    });
+  }
 }
 
-function fillProfile(){
-  $("pfUser").textContent = State.me?.username || "—";
-  $("pfEmail").textContent = State.me?.email || "—";
-  $("pfCompany").textContent = State.me?.company_key || "—";
-  $("profileRole").textContent = State.role.toUpperCase();
-}
-
-// ===== ACTIONS =====
 async function createTicket(){
-  setMsg("newTicketMsg", "Enviando...");
+  setMsg("ticket_msg", "Enviando...");
 
-  const title = ($("t_title").value || "").trim();
-  const category = $("t_category").value || "Sistema";
-  const priority = $("t_priority").value || "media";
-  const description = ($("t_desc").value || "").trim();
+  const title = ($("t_title")?.value || "").trim();
+  const category = $("t_category")?.value || "";
+  const priority = $("t_priority")?.value || "";
+  const description = ($("t_desc")?.value || "").trim();
+  const consent = !!$("t_consent")?.checked;
 
-  if(!title || !description){
-    setMsg("newTicketMsg", "❌ Preencha título e descrição.");
+  if(!consent){
+    setMsg("ticket_msg", "❌ Marque a autorização de acesso remoto.");
+    return;
+  }
+  if(!title || !category || !priority || !description){
+    setMsg("ticket_msg", "❌ Preencha todos os campos.");
     return;
   }
 
-  const r = await api("/api/tickets/create", {
+  const res = await api("/api/tickets/create", {
     method:"POST",
     body: JSON.stringify({ title, category, priority, description })
   });
 
-  if(!r.ok){
-    setMsg("newTicketMsg", "❌ " + (r.data.message || "Erro ao criar chamado"));
+  if(!res.ok){
+    setMsg("ticket_msg", "❌ " + (res.data.message || "Falha ao criar chamado"));
     return;
   }
 
-  setMsg("newTicketMsg", "✅ Chamado criado! Acesso remoto já permitido ✅");
-
-  // limpa
+  setMsg("ticket_msg", `✅ Chamado #${res.data.ticket_id} criado! Remoto: Permitido.`);
   $("t_title").value = "";
   $("t_desc").value = "";
-  $("t_priority").value = "media";
+  $("t_priority").value = "Média";
   $("t_category").value = "Sistema";
 
-  // vai pra lista
-  setTimeout(async () => {
-    setMsg("newTicketMsg", "");
-    setActiveNav("my");
-    showPage("pageMyTickets");
-    await loadMyTickets();
-    await refreshDashboard();
-  }, 700);
+  // vai pra lista e abre o detalhe do novo ticket
+  await loadTickets();
+  setActiveNav("myTickets");
+  State.ticketFilter = "ALL";
+  document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+  document.querySelector('.chip[data-filter="ALL"]')?.classList.add("active");
+  await renderTicketDetail(res.data.ticket_id);
 }
 
-async function devGenKey(){
-  setMsg("devMsg", "Gerando...");
-  $("keyOut").textContent = "—";
-
-  const r = await api("/api/dev/key/new", { method:"POST", body: JSON.stringify({}) });
-  if(!r.ok){
-    setMsg("devMsg", "❌ " + (r.data.message || "Falha"));
-    return;
-  }
-
-  $("keyOut").textContent = r.data.company_key;
-  setMsg("devMsg", "✅ Chave gerada!");
+function logout(){
+  Storage.clear();
+  location.reload();
 }
 
-// ===== AUTH =====
-const AUTH = {
+// ===== Signup/Login/Forgot =====
+const API_AUTH = {
   async checkUsername(){
     const u = ($("su_user")?.value || "").trim().toLowerCase();
     const hint = $("su_hint");
@@ -369,17 +332,16 @@ const AUTH = {
       hint.style.color = "rgba(255,255,255,.42)";
       return;
     }
-
     hint.textContent = "verificando…";
     hint.style.color = "rgba(255,255,255,.42)";
 
     try{
-      const res = await fetch("/api/check-username", {
+      const r = await fetch("/api/check-username", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ username: u })
       });
-      const data = await res.json();
+      const data = await r.json();
 
       if(data.ok && data.available){
         hint.textContent = "disponível ✅";
@@ -397,21 +359,21 @@ const AUTH = {
   async signup(){
     setMsg("signup_msg", "Criando conta...");
 
-    const company_key = ($("su_key").value || "").trim();
-    const username = ($("su_user").value || "").trim().toLowerCase();
-    const email = ($("su_email").value || "").trim().toLowerCase();
-    const password = $("su_pass").value || "";
-    const confirm = $("su_confirm").value || "";
-    const role = $("su_role").value || "client";
+    const company_key = ($("su_key")?.value || "").trim();
+    const username = ($("su_user")?.value || "").trim().toLowerCase();
+    const email = ($("su_email")?.value || "").trim().toLowerCase();
+    const password = $("su_pass")?.value || "";
+    const confirm = $("su_confirm")?.value || "";
+    const role = $("su_role")?.value || "client";
 
     try{
-      const res = await fetch("/api/signup", {
+      const r = await fetch("/api/signup", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ company_key, username, email, password, confirm, role })
       });
 
-      const data = await res.json();
+      const data = await r.json();
       if(!data.ok){
         setMsg("signup_msg", "❌ " + (data.message || "Falha ao criar conta"));
         return;
@@ -420,7 +382,15 @@ const AUTH = {
       setMsg("signup_msg", "✅ Conta criada! Voltando pro login...");
 
       setTimeout(()=>{
-        ["su_key","su_user","su_email","su_pass","su_confirm"].forEach(id => { if($(id)) $(id).value = ""; });
+        ["su_key","su_user","su_email","su_pass","su_confirm"].forEach(id=>{
+          const el = $(id);
+          if(el) el.value = "";
+        });
+        const hint = $("su_hint");
+        if(hint){
+          hint.textContent = "Digite para verificar…";
+          hint.style.color = "rgba(255,255,255,.42)";
+        }
         setMsg("signup_msg","");
         showAuthScreen("screenLogin");
       }, 800);
@@ -433,18 +403,18 @@ const AUTH = {
   async login(){
     setMsg("login_msg", "Conectando...");
 
-    const login = ($("login_login").value || "").trim().toLowerCase();
-    const password = $("login_pass").value || "";
+    const login = ($("login_login")?.value || "").trim().toLowerCase();
+    const password = $("login_pass")?.value || "";
     const remember = !!$("login_remember")?.checked;
 
     try{
-      const res = await fetch("/api/login", {
+      const r = await fetch("/api/login", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ login, password })
       });
 
-      const data = await res.json();
+      const data = await r.json();
       if(!data.ok){
         setMsg("login_msg", "❌ " + (data.message || "Falha no login"));
         return;
@@ -462,20 +432,20 @@ const AUTH = {
   async forgot(){
     setMsg("forgot_msg", "Enviando...");
 
-    const email = ($("fg_email").value || "").trim().toLowerCase();
+    const email = ($("fg_email")?.value || "").trim().toLowerCase();
     if(!email){
       setMsg("forgot_msg","❌ Digite seu email.");
       return;
     }
 
     try{
-      const res = await fetch("/api/forgot/send", {
+      const r = await fetch("/api/forgot/send", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ email })
       });
 
-      const data = await res.json();
+      const data = await r.json();
       if(!data.ok){
         setMsg("forgot_msg","❌ " + (data.message || "Falha ao enviar"));
         return;
@@ -489,78 +459,82 @@ const AUTH = {
 };
 
 async function bootApp(){
-  const me = await loadMe();
-  if(!me){
-    showAuth();
-    return;
-  }
-
-  State.me = me;
-  State.role = me.role || "client";
-
-  $("sbRole").textContent = State.role.toUpperCase();
-  $("sbUser").textContent = `${me.username} • ${me.email}`;
-  $("helloTxt").textContent = `Olá, ${me.username}`;
+  const ok = await bootMe();
+  if(!ok) return;
 
   showApp();
-  buildSidebar();
-  showPage("pageDashboard");
+  setActiveNav("home");
 
-  // perfil inicial
-  fillProfile();
-
-  // dash
-  await refreshDashboard();
-
-  // tabs
-  $("ticketTabs")?.querySelectorAll(".tab").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      $("ticketTabs").querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      State.filter = btn.dataset.filter;
-      renderTicketList(State.myTickets, $("ticketList"));
-    });
-  });
-
-  // search
-  $("searchInput")?.addEventListener("input", () => {
-    if(!State.me) return;
-    if(!$("pageMyTickets").classList.contains("hidden")){
-      renderTicketList(State.myTickets, $("ticketList"));
-    }else if(!$("pageCompanyTickets").classList.contains("hidden")){
-      renderCompanyTicketList(State.companyTickets, $("companyTicketList"));
-    }
-  });
+  // carrega tickets e dashboard
+  await loadTickets();
 }
 
-function logout(){
-  Storage.clear();
-  location.reload();
+function escapeHtml(str){
+  return String(str || "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
-// ===== INIT =====
 document.addEventListener("DOMContentLoaded", async () => {
+  // Auth nav
   $("btnGoSignup")?.addEventListener("click", () => showAuthScreen("screenSignup"));
   $("btnForgot")?.addEventListener("click", () => showAuthScreen("screenForgot"));
   $("btnBackFromSignup")?.addEventListener("click", () => showAuthScreen("screenLogin"));
   $("btnBackFromForgot")?.addEventListener("click", () => showAuthScreen("screenLogin"));
 
-  $("btnLogin")?.addEventListener("click", AUTH.login);
-  $("btnSignup")?.addEventListener("click", AUTH.signup);
-  $("btnSendForgot")?.addEventListener("click", AUTH.forgot);
+  // Auth actions
+  $("btnLogin")?.addEventListener("click", API_AUTH.login);
+  $("btnSignup")?.addEventListener("click", API_AUTH.signup);
+  $("btnSendForgot")?.addEventListener("click", API_AUTH.forgot);
 
-  $("btnEyeLogin")?.addEventListener("click", (e) => { e.preventDefault(); togglePass("login_pass"); });
-  $("btnEyeSuPass")?.addEventListener("click", (e) => { e.preventDefault(); togglePass("su_pass"); });
-  $("btnEyeSuConfirm")?.addEventListener("click", (e) => { e.preventDefault(); togglePass("su_confirm"); });
+  $("btnEyeLogin")?.addEventListener("click", (e)=>{ e.preventDefault(); togglePass("login_pass"); });
+  $("btnEyeSuPass")?.addEventListener("click", (e)=>{ e.preventDefault(); togglePass("su_pass"); });
+  $("btnEyeSuConfirm")?.addEventListener("click", (e)=>{ e.preventDefault(); togglePass("su_confirm"); });
 
-  $("su_user")?.addEventListener("input", AUTH.checkUsername);
+  $("su_user")?.addEventListener("input", API_AUTH.checkUsername);
 
-  $("btnLogout")?.addEventListener("click", logout);
+  // App nav
+  document.querySelectorAll(".navItem").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const page = btn.dataset.page;
+      setActiveNav(page);
+      if(page === "home") renderHome();
+      if(page === "myTickets") renderTicketsList();
+    });
+  });
 
+  // Filters
+  document.querySelectorAll(".chip").forEach(ch => {
+    ch.addEventListener("click", () => {
+      document.querySelectorAll(".chip").forEach(x => x.classList.remove("active"));
+      ch.classList.add("active");
+      State.ticketFilter = ch.dataset.filter;
+      renderTicketsList();
+    });
+  });
+
+  // Search
+  $("globalSearch")?.addEventListener("input", () => {
+    renderTicketsList();
+  });
+
+  // Create ticket
   $("btnCreateTicket")?.addEventListener("click", createTicket);
-  $("btnGenKey")?.addEventListener("click", devGenKey);
 
-  // se já tem token, entra direto
-  const t = Storage.getToken();
-  if(t) await bootApp();
+  // Logout
+  $("btnLogout2")?.addEventListener("click", logout);
+  $("btnLogout3")?.addEventListener("click", logout);
+
+  // initial
+  showAuth();
+  showAuthScreen("screenLogin");
+
+  // auto login
+  const token = Storage.getToken();
+  if(token){
+    await bootApp();
+  }
 });
