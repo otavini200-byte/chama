@@ -6,16 +6,22 @@ const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
 
 const app = express();
-app.use(cors());
+
+// ✅ CORS liberado para funcionar no GitHub Pages + qualquer domínio
+app.use(cors({ origin: "*", methods: ["GET", "POST", "OPTIONS"], allowedHeaders: ["Content-Type", "Authorization"] }));
 app.use(express.json());
+
+// ✅ Servir o painel do técnico quando abrir a URL do Render no navegador
 app.use(express.static(path.join(__dirname, "public")));
 
+// ✅ Banco SQLite local
 const DB_PATH = path.join(__dirname, "db.sqlite");
 const db = new sqlite3.Database(DB_PATH);
 
-const JWT_SECRET = "TROQUE_ESSA_CHAVE_SUPER_SECRETA";
+// ✅ JWT secret (Render -> Environment Variables)
+const JWT_SECRET = process.env.JWT_SECRET || "DEV_SECRET_CHANGE_ME";
 
-// cria tabela e usuário admin padrão
+// ✅ Cria tabela e usuário admin padrão
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
@@ -27,7 +33,7 @@ db.serialize(() => {
   `);
 
   db.get(`SELECT * FROM users WHERE email = ?`, ["admin@local"], async (err, row) => {
-    if (err) return console.error(err);
+    if (err) return console.error("DB error:", err);
     if (!row) {
       const hash = await bcrypt.hash("admin123", 10);
       db.run(
@@ -39,7 +45,12 @@ db.serialize(() => {
   });
 });
 
-// LOGIN
+// ✅ Rota de saúde (pra testar rapidão)
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true, service: "remote-desk-server", time: new Date().toISOString() });
+});
+
+// ✅ LOGIN
 app.post("/api/login", (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ ok: false, message: "Dados inválidos." });
@@ -61,7 +72,7 @@ app.post("/api/login", (req, res) => {
   });
 });
 
-// ROTA PROTEGIDA (teste)
+// ✅ Rota protegida (teste)
 app.get("/api/me", (req, res) => {
   const auth = req.headers.authorization || "";
   const token = auth.replace("Bearer ", "");
@@ -75,5 +86,6 @@ app.get("/api/me", (req, res) => {
   }
 });
 
-const PORT = 3333;
-app.listen(PORT, () => console.log("✅ Server ON: http://localhost:" + PORT));
+// ✅ PORT compatível com Render (obrigatório)
+const PORT = process.env.PORT || 3333;
+app.listen(PORT, "0.0.0.0", () => console.log("✅ Server ON na porta " + PORT));
