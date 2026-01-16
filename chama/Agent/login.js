@@ -1,4 +1,4 @@
-const SERVER = "https://chama-vf47.onrender.com/";
+const SERVER = "https://chama-3fxc.onrender.com";
 const msg = document.getElementById("msg");
 
 document.getElementById("toggle").addEventListener("click", (e) => {
@@ -11,6 +11,7 @@ document.getElementById("btnLogin").addEventListener("click", login);
 
 async function login(){
   msg.textContent = "Conectando...";
+
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value.trim();
 
@@ -22,16 +23,14 @@ async function login(){
     });
 
     const data = await r.json();
-
     if(!data.ok){
       msg.textContent = "❌ " + (data.message || "Falha no login");
       return;
     }
 
-    msg.textContent = "✅ Login OK! Próximo passo: tela do Agent online.";
-    // depois a gente troca a página pra “Agent Dashboard”
+    msg.textContent = "✅ Login OK! (Servidor Render)";
+    // depois: abrir dashboard do agent online + ID
   }catch{
-    msg.textContent = "❌ Servidor offline (confere se o server está rodando).";
+    msg.textContent = "❌ Servidor offline (Render)";
   }
 }
-
