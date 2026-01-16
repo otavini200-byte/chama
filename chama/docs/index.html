@@ -1,10 +1,3 @@
-self.addEventListener("install", (event) => {
-  self.skipWaiting();
-});
-
-self.addEventListener("fetch", (event) => {
-  // por enquanto vazio
-});
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -23,13 +16,8 @@ self.addEventListener("fetch", (event) => {
         <div class="logo">RD</div>
         <div>
           <h1>Remote Desk</h1>
-          <p>Console do Técnico</p>
+          <p>Console do Técnico (GitHub Pages)</p>
         </div>
-      </div>
-
-      <div class="tabs">
-        <button class="tab active">Entrar</button>
-        <button class="tab" disabled>SSO</button>
       </div>
 
       <label>Email</label>
@@ -41,20 +29,17 @@ self.addEventListener("fetch", (event) => {
         <button class="eye" id="toggle">👁</button>
       </div>
 
-      <div class="row">
-        <label class="check">
-          <input id="remember" type="checkbox" checked />
-          <span>Lembrar login</span>
-        </label>
-        <a class="link" href="#" onclick="alert('Depois criamos recuperação!')">Esqueci</a>
-      </div>
+      <label class="check">
+        <input id="remember" type="checkbox" checked />
+        <span>Lembrar login</span>
+      </label>
 
       <button class="btn" onclick="login()">Entrar</button>
       <p id="msg" class="msg"></p>
 
       <div id="app" class="app hidden">
         <h2>✅ Logado</h2>
-        <p class="small">Agora seu console tá online no GitHub Pages.</p>
+        <p class="small">API Render conectada ✅</p>
         <button class="btn ghost" onclick="logout()">Sair</button>
       </div>
     </section>
