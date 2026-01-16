@@ -1,4 +1,4 @@
-console.log("✅ app.js carregou");
+console.log("✅ app.js carregou MESMO");
 
 function hideAllScreens(){
   ["screenLogin","screenSignup","screenForgot","screenDash"].forEach(id => {
@@ -11,6 +11,7 @@ function showScreen(id){
   hideAllScreens();
   const el = document.getElementById(id);
   if(el) el.classList.remove("hidden");
+  console.log("🟣 Tela:", id);
 }
 
 function togglePass(id){
@@ -59,8 +60,8 @@ const API = {
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({ username: u })
       });
-
       const data = await r.json();
+
       if(data.ok && data.available){
         hint.textContent = "disponível ✅";
         hint.style.color = "rgba(46,229,157,.95)";
@@ -111,7 +112,7 @@ const API = {
         }
         setMsg("signup_msg","");
         showScreen("screenLogin");
-      }, 900);
+      }, 800);
 
     }catch{
       setMsg("signup_msg", "❌ Servidor offline");
@@ -163,11 +164,11 @@ const API = {
         return;
       }
 
-      const me = document.getElementById("dash_me");
-      const role = document.getElementById("dash_role");
+      document.getElementById("dash_me").textContent =
+        `${data.payload.username} • ${data.payload.email}`;
 
-      if(me) me.textContent = `${data.payload.username} • ${data.payload.email}`;
-      if(role) role.textContent = (data.payload.role === "operator" ? "Operador" : "Cliente");
+      document.getElementById("dash_role").textContent =
+        (data.payload.role === "operator" ? "Operador" : "Cliente");
     }catch{
       Storage.clear();
       showScreen("screenLogin");
@@ -208,32 +209,28 @@ const API = {
   }
 };
 
-// ✅ inicia quando o html carregar
+// ✅ iniciar
 document.addEventListener("DOMContentLoaded", () => {
-  // navegação
+  console.log("✅ DOM pronto");
+
   document.getElementById("btnGoSignup")?.addEventListener("click", () => showScreen("screenSignup"));
   document.getElementById("btnForgot")?.addEventListener("click", () => showScreen("screenForgot"));
   document.getElementById("btnBackFromSignup")?.addEventListener("click", () => showScreen("screenLogin"));
   document.getElementById("btnBackFromForgot")?.addEventListener("click", () => showScreen("screenLogin"));
 
-  // ações
   document.getElementById("btnLogin")?.addEventListener("click", API.login);
   document.getElementById("btnSignup")?.addEventListener("click", API.signup);
   document.getElementById("btnSendForgot")?.addEventListener("click", API.forgot);
   document.getElementById("btnLogout")?.addEventListener("click", API.logout);
 
-  // olhos
   document.getElementById("btnEyeLogin")?.addEventListener("click", (e) => { e.preventDefault(); togglePass("login_pass"); });
   document.getElementById("btnEyeSuPass")?.addEventListener("click", (e) => { e.preventDefault(); togglePass("su_pass"); });
   document.getElementById("btnEyeSuConfirm")?.addEventListener("click", (e) => { e.preventDefault(); togglePass("su_confirm"); });
 
-  // verificar username ao digitar
   document.getElementById("su_user")?.addEventListener("input", API.checkUsername);
 
-  // tela inicial
   showScreen("screenLogin");
 
-  // auto-login
   const t = Storage.getToken();
   if(t) API.bootDash();
 });
