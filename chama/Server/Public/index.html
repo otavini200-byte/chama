@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Remote Desk • Console</title>
+  <title>Chama • Console</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -12,44 +12,150 @@
 
   <main class="wrap">
     <section class="card">
-      <div class="brand">
-        <div class="logo">RD</div>
-        <div>
-          <h1>Remote Desk</h1>
-          <p>Console do Técnico</p>
+
+      <header class="brand">
+        <div class="logo">CH</div>
+        <div class="brandText">
+          <h1>Chama</h1>
+          <p>Sistema de Chamados & Acesso</p>
         </div>
-      </div>
+      </header>
 
-      <div class="tabs">
-        <button class="tab active">Entrar</button>
-        <button class="tab" disabled>SSO</button>
-      </div>
+      <!-- TABS -->
+      <nav class="tabs">
+        <button class="tab active" id="tabLogin" onclick="UI.show('login')">Entrar</button>
+        <button class="tab" id="tabSignup" onclick="UI.show('signup')">Criar conta</button>
+        <button class="tab" id="tabForgot" onclick="UI.show('forgot')">Recuperar</button>
+      </nav>
 
-      <label>Email</label>
-      <input id="email" type="email" placeholder="admin@local" />
+      <!-- LOGIN -->
+      <section id="screenLogin" class="screen">
+        <div class="field">
+          <label>Usuário ou Email</label>
+          <input id="login_login" placeholder="ex: otavio ou otavio@email.com" autocomplete="username" />
+        </div>
 
-      <label>Senha</label>
-      <div class="pass">
-        <input id="password" type="password" placeholder="admin123" />
-        <button class="eye" id="toggle">👁</button>
-      </div>
+        <div class="field">
+          <label>Senha</label>
+          <div class="inputIcon">
+            <input id="login_pass" type="password" placeholder="••••••••" autocomplete="current-password" />
+            <button class="iconBtn" onclick="UI.togglePass('login_pass')" title="Ver senha">👁</button>
+          </div>
+        </div>
 
-      <div class="row">
-        <label class="check">
-          <input id="remember" type="checkbox" checked />
-          <span>Lembrar login</span>
-        </label>
-        <a class="link" href="#" onclick="alert('Depois criamos recuperação!')">Esqueci</a>
-      </div>
+        <div class="row">
+          <label class="check">
+            <input id="login_remember" type="checkbox" checked />
+            <span>Lembrar de mim</span>
+          </label>
 
-      <button class="btn" onclick="login()">Entrar</button>
-      <p id="msg" class="msg"></p>
+          <button class="linkBtn" onclick="UI.show('forgot')">Esqueci a senha</button>
+        </div>
 
-      <div id="app" class="app hidden">
-        <h2>✅ Logado</h2>
-        <p class="small">Servidor no Render: <b>online</b>.</p>
-        <button class="btn ghost" onclick="logout()">Sair</button>
-      </div>
+        <button class="btn primary" onclick="API.login()">Entrar</button>
+        <p class="msg" id="login_msg"></p>
+      </section>
+
+      <!-- SIGNUP -->
+      <section id="screenSignup" class="screen hidden">
+        <div class="pill">
+          <span>🔑 Chave da empresa só é usada aqui na criação.</span>
+        </div>
+
+        <div class="field">
+          <label>Chave da Empresa</label>
+          <input id="su_key" placeholder="Ex: ABC-123-XYZ" />
+        </div>
+
+        <div class="field">
+          <label>Usuário (único)</label>
+          <div class="inputIcon">
+            <input id="su_user" placeholder="Ex: otavio" oninput="API.checkUsername()" />
+            <span class="hint" id="su_hint">Digite para verificar…</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Email</label>
+          <input id="su_email" type="email" placeholder="otavio@email.com" />
+        </div>
+
+        <div class="field">
+          <label>Senha</label>
+          <div class="inputIcon">
+            <input id="su_pass" type="password" placeholder="mín. 6 caracteres" />
+            <button class="iconBtn" onclick="UI.togglePass('su_pass')" title="Ver senha">👁</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Confirmar Senha</label>
+          <div class="inputIcon">
+            <input id="su_confirm" type="password" placeholder="repete a senha" />
+            <button class="iconBtn" onclick="UI.togglePass('su_confirm')" title="Ver senha">👁</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Tipo de Conta</label>
+          <select id="su_role">
+            <option value="client">Cliente</option>
+            <option value="operator">Operador</option>
+          </select>
+        </div>
+
+        <button class="btn primary" onclick="API.signup()">Criar conta</button>
+        <p class="msg" id="signup_msg"></p>
+      </section>
+
+      <!-- FORGOT -->
+      <section id="screenForgot" class="screen hidden">
+        <div class="pill">
+          <span>📩 Vamos mandar um link de recuperação no seu email.</span>
+        </div>
+
+        <div class="field">
+          <label>Email</label>
+          <input id="fg_email" type="email" placeholder="otavio@email.com" />
+        </div>
+
+        <button class="btn primary" onclick="API.forgot()">Enviar link</button>
+        <p class="msg" id="forgot_msg"></p>
+
+        <button class="btn ghost" onclick="UI.show('login')">Voltar</button>
+      </section>
+
+      <!-- DASHBOARD (após login) -->
+      <section id="screenDash" class="screen hidden">
+        <div class="dashTop">
+          <div>
+            <h2 class="dashTitle">✅ Logado</h2>
+            <p class="dashSub" id="dash_me">Carregando…</p>
+          </div>
+          <button class="btn ghost mini" onclick="API.logout()">Sair</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="cards">
+          <div class="miniCard">
+            <b>Status</b>
+            <span class="tag ok">Online</span>
+          </div>
+
+          <div class="miniCard">
+            <b>Conta</b>
+            <span class="tag" id="dash_role">—</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <p class="small">
+          Próximo passo: painel do Operador listar PCs e Chamados (a gente faz já já).
+        </p>
+      </section>
+
     </section>
   </main>
 
