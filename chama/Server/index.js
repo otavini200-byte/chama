@@ -12,21 +12,21 @@ const app = express();
 app.use(cors({ origin: "*", methods: ["GET", "POST", "OPTIONS"], allowedHeaders: ["Content-Type", "Authorization"] }));
 app.use(express.json());
 
-// ✅ Serve telas do painel
-app.use(express.static(path.join(__dirname, "Public")));
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "Public", "index.html")));
+// ✅ ATENÇÃO: pasta é Public (P MAIÚSCULO)
+const STATIC_DIR = path.join(__dirname, "Public");
+app.use(express.static(STATIC_DIR));
 
-// ✅ Banco
+// ✅ abre index.html ao entrar na raiz
+app.get("/", (req, res) => {
+  res.sendFile(path.join(STATIC_DIR, "index.html"));
+});
+
 const DB_PATH = path.join(__dirname, "db.sqlite");
 const db = new sqlite3.Database(DB_PATH);
 
-// ✅ Secrets / Config
 const JWT_SECRET = process.env.JWT_SECRET || "DEV_SECRET_CHANGE_ME";
 const APP_URL = process.env.APP_URL || "https://chama-3fxc.onrender.com";
 
-// ✅ SMTP (opcional)
-// Configure no Render -> Environment Variables:
-// SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, FROM_EMAIL
 const SMTP_HOST = process.env.SMTP_HOST || "";
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
 const SMTP_USER = process.env.SMTP_USER || "";
@@ -46,7 +46,6 @@ function createTransport() {
   });
 }
 
-// ========= HELPERS =========
 function normalizeKey(k) {
   return String(k || "").trim().toUpperCase();
 }
@@ -57,7 +56,6 @@ function normalizeLogin(x) {
   return String(x || "").trim().toLowerCase();
 }
 
-// ========= AUTH =========
 function auth(req, res, next) {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.replace("Bearer ", "");
@@ -71,7 +69,7 @@ function auth(req, res, next) {
   }
 }
 
-// ========= DB SCHEMA =========
+// ========= DB =========
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS companies (
@@ -81,7 +79,6 @@ db.serialize(() => {
     )
   `);
 
-  // ✅ Importante: username e email são ÚNICOS no sistema inteiro (login sem chave)
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,15 +101,6 @@ db.serialize(() => {
     )
   `);
 });
-
-function getCompanyIdByKey(company_key) {
-  return new Promise((resolve, reject) => {
-    db.get(`SELECT id FROM companies WHERE company_key=?`, [company_key], (err, row) => {
-      if (err) return reject(err);
-      resolve(row ? row.id : null);
-    });
-  });
-}
 
 function createCompanyIfNeeded(company_key) {
   return new Promise((resolve, reject) => {
@@ -137,7 +125,6 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "chama-server", time: new Date().toISOString() });
 });
 
-// ✅ Check username (disponível)
 app.post("/api/check-username", (req, res) => {
   const username = normalizeUsername(req.body?.username);
   if (!username) return res.status(400).json({ ok: false, message: "Usuário inválido." });
@@ -148,7 +135,6 @@ app.post("/api/check-username", (req, res) => {
   });
 });
 
-// ✅ Signup (chave só aqui)
 app.post("/api/signup", async (req, res) => {
   try {
     const company_key = normalizeKey(req.body?.company_key);
@@ -161,25 +147,20 @@ app.post("/api/signup", async (req, res) => {
     if (!company_key || !username || !email || !password || !confirm) {
       return res.status(400).json({ ok: false, message: "Preencha tudo." });
     }
-
     if (password.length < 6) {
       return res.status(400).json({ ok: false, message: "Senha mínima: 6 caracteres." });
     }
-
     if (password !== confirm) {
       return res.status(400).json({ ok: false, message: "As senhas não conferem." });
     }
 
-    // cria empresa se não existir
     const companyId = await createCompanyIfNeeded(company_key);
 
-    // username único
     const userExists = await new Promise((resolve) => {
       db.get(`SELECT id FROM users WHERE username=?`, [username], (err, row) => resolve(!!row));
     });
     if (userExists) return res.status(409).json({ ok: false, message: "Usuário indisponível." });
 
-    // email único
     const emailExists = await new Promise((resolve) => {
       db.get(`SELECT id FROM users WHERE email=?`, [email], (err, row) => resolve(!!row));
     });
@@ -201,7 +182,6 @@ app.post("/api/signup", async (req, res) => {
   }
 });
 
-// ✅ Login (SEM chave): login pode ser email ou usuário
 app.post("/api/login", (req, res) => {
   const login = normalizeLogin(req.body?.login);
   const password = String(req.body?.password || "");
@@ -245,23 +225,21 @@ app.post("/api/login", (req, res) => {
   );
 });
 
-// ✅ Me
 app.get("/api/me", auth, (req, res) => {
   res.json({ ok: true, payload: req.user });
 });
 
-// ✅ Forgot password: envia link pelo email (ou retorna debugLink nos logs se não tiver SMTP)
 app.post("/api/forgot/send", (req, res) => {
   const email = normalizeLogin(req.body?.email);
 
   if (!email) return res.status(400).json({ ok: false, message: "Digite seu email." });
 
-  db.get(`SELECT id, email FROM users WHERE email=?`, [email], async (err, user) => {
+  db.get(`SELECT id FROM users WHERE email=?`, [email], async (err, user) => {
     if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
     if (!user) return res.status(404).json({ ok: false, message: "Email não encontrado." });
 
     const token = crypto.randomBytes(24).toString("hex");
-    const expires = Date.now() + 1000 * 60 * 20; // 20 min
+    const expires = Date.now() + 1000 * 60 * 20;
 
     db.run(
       `INSERT INTO reset_tokens (user_id, token, expires_at, used) VALUES (?,?,?,0)`,
@@ -271,14 +249,9 @@ app.post("/api/forgot/send", (req, res) => {
 
         const link = `${APP_URL}/reset.html?token=${token}`;
 
-        // ✅ sem SMTP: imprime no LOG e também devolve debugLink
         if (!hasMailerConfig()) {
           console.log("📩 LINK RESET (SEM SMTP):", link);
-          return res.json({
-            ok: true,
-            message: "Link gerado! (SMTP não configurado) — veja os logs do Render.",
-            debugLink: link
-          });
+          return res.json({ ok: true, message: "SMTP não configurado (veja logs).", debugLink: link });
         }
 
         try {
@@ -298,13 +271,12 @@ app.post("/api/forgot/send", (req, res) => {
                     Redefinir senha
                   </a>
                 </p>
-                <p>Se você não pediu isso, ignore este email.</p>
               </div>
             `
           });
 
           return res.json({ ok: true, message: "Email de recuperação enviado!" });
-        } catch (e) {
+        } catch {
           return res.status(500).json({ ok: false, message: "Falha ao enviar email (SMTP)." });
         }
       }
@@ -312,7 +284,6 @@ app.post("/api/forgot/send", (req, res) => {
   });
 });
 
-// ✅ Reset verify (token válido?)
 app.get("/api/reset/verify", (req, res) => {
   const token = String(req.query?.token || "");
   if (!token) return res.status(400).json({ ok: false, message: "Token inválido." });
@@ -320,7 +291,6 @@ app.get("/api/reset/verify", (req, res) => {
   db.get(`SELECT * FROM reset_tokens WHERE token=?`, [token], (err, row) => {
     if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
     if (!row) return res.status(404).json({ ok: false, message: "Token não encontrado." });
-
     if (row.used) return res.status(410).json({ ok: false, message: "Token já usado." });
     if (Date.now() > row.expires_at) return res.status(410).json({ ok: false, message: "Token expirado." });
 
@@ -328,7 +298,6 @@ app.get("/api/reset/verify", (req, res) => {
   });
 });
 
-// ✅ Reset confirm (nova senha)
 app.post("/api/reset/confirm", async (req, res) => {
   const token = String(req.body?.token || "");
   const password = String(req.body?.password || "");
@@ -351,14 +320,11 @@ app.post("/api/reset/confirm", async (req, res) => {
 
       db.run(`UPDATE reset_tokens SET used=1 WHERE token=?`, [token], (err3) => {
         if (err3) return res.status(500).json({ ok: false, message: "Erro ao finalizar reset." });
-
         return res.json({ ok: true, message: "Senha atualizada com sucesso!" });
       });
     });
   });
 });
 
-// ✅ Porta compatível com Render
 const PORT = process.env.PORT || 3333;
 app.listen(PORT, "0.0.0.0", () => console.log("✅ Server ON na porta " + PORT));
-
