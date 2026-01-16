@@ -13,10 +13,6 @@ function setToken(token){
   else sessionStorage.setItem("token", token);
 }
 
-function getToken(){
-  return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
-}
-
 function clearToken(){
   localStorage.removeItem("token");
   sessionStorage.removeItem("token");
@@ -24,6 +20,7 @@ function clearToken(){
 
 async function login(){
   msg.textContent = "Conectando...";
+
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value.trim();
 
@@ -35,6 +32,7 @@ async function login(){
     });
 
     const data = await r.json();
+
     if(!data.ok){
       msg.textContent = "❌ " + (data.message || "Falha no login");
       return;
