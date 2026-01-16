@@ -11,7 +11,6 @@ function showScreen(id){
   hideAllScreens();
   const el = document.getElementById(id);
   if(el) el.classList.remove("hidden");
-  console.log("🟣 Tela:", id);
 }
 
 function togglePass(id){
@@ -168,7 +167,7 @@ const API = {
         `${data.payload.username} • ${data.payload.email}`;
 
       document.getElementById("dash_role").textContent =
-        (data.payload.role === "operator" ? "Operador" : "Cliente");
+        (data.payload.role === "operator" ? "Operador" : (data.payload.role === "dev" ? "DEV" : "Cliente"));
     }catch{
       Storage.clear();
       showScreen("screenLogin");
@@ -209,10 +208,7 @@ const API = {
   }
 };
 
-// ✅ iniciar
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("✅ DOM pronto");
-
   document.getElementById("btnGoSignup")?.addEventListener("click", () => showScreen("screenSignup"));
   document.getElementById("btnForgot")?.addEventListener("click", () => showScreen("screenForgot"));
   document.getElementById("btnBackFromSignup")?.addEventListener("click", () => showScreen("screenLogin"));
