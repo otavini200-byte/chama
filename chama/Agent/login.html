@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Agent Login</title>
+  <link rel="stylesheet" href="login.css">
+</head>
+<body>
+
+  <div class="bg"></div>
+
+  <main class="wrap">
+    <section class="card">
+      <div class="brand">
+        <div class="logo">RD</div>
+        <div>
+          <h1>Remote Desk</h1>
+          <p>Agent • Acesso Seguro</p>
+        </div>
+      </div>
+
+      <div class="pill">🔒 Criptografado • Controle com consentimento</div>
+
+      <label>Email</label>
+      <input id="email" type="email" placeholder="admin@local" />
+
+      <label>Senha</label>
+      <div class="pass">
+        <input id="password" type="password" placeholder="admin123" />
+        <button class="eye" id="toggle">👁</button>
+      </div>
+
+      <label class="check">
+        <input id="remember" type="checkbox" checked>
+        <span>Manter sessão</span>
+      </label>
+
+      <button class="btn" id="btnLogin">Entrar</button>
+      <p id="msg" class="msg"></p>
+
+      <div class="hint">
+        <span>Servidor</span>
+        <code id="srv">http://localhost:3333</code>
+      </div>
+    </section>
+  </main>
+
+  <script src="login.js"></script>
+</body>
+</html>
