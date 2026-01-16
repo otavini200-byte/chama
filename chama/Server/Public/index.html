@@ -6,12 +6,13 @@
   <title>Chama • Acesso</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
-
 <body>
+
   <div class="bg"></div>
 
-  <main class="wrap">
-    <section class="card" id="authCard">
+  <!-- ===== AUTH (LOGIN/CADASTRO/ESQUECI) ===== -->
+  <main class="wrap" id="authWrap">
+    <section class="card">
 
       <header class="brand">
         <div class="logo">CH</div>
@@ -25,7 +26,7 @@
       <section id="screenLogin" class="screen">
         <div class="field">
           <label>Usuário ou Email</label>
-          <input id="login_login" placeholder="ex: otavio ou otavini200@gmail.com" autocomplete="username" />
+          <input id="login_login" placeholder="ex: otavio ou email@dominio.com" autocomplete="username" />
         </div>
 
         <div class="field">
@@ -73,14 +74,14 @@
         <div class="field">
           <label>Usuário (único)</label>
           <div class="inputIcon">
-            <input id="su_user" placeholder="Ex: otavio_cliente" />
+            <input id="su_user" placeholder="Ex: joao.silva" />
             <span class="hint" id="su_hint">Digite para verificar…</span>
           </div>
         </div>
 
         <div class="field">
           <label>Email</label>
-          <input id="su_email" type="email" placeholder="seuemail@gmail.com" />
+          <input id="su_email" type="email" placeholder="email@dominio.com" />
         </div>
 
         <div class="field">
@@ -124,211 +125,222 @@
 
         <div class="field">
           <label>Email</label>
-          <input id="fg_email" type="email" placeholder="seuemail@gmail.com" />
+          <input id="fg_email" type="email" placeholder="email@dominio.com" />
         </div>
 
         <button class="btn primary" id="btnSendForgot">Enviar link</button>
         <p class="msg" id="forgot_msg"></p>
       </section>
+
     </section>
+  </main>
 
-    <!-- ✅ APP SHELL (painel) -->
-    <section class="app hidden" id="appShell">
+  <!-- ===== APP SHELL (PAINEL CLIENTE) ===== -->
+  <main class="app hidden" id="appWrap">
+    <aside class="sidebar">
+      <div class="sbTop">
+        <div class="sbLogo">CH</div>
+        <div class="sbTitle">
+          <b>Chama</b>
+          <span id="sbSub">Cliente</span>
+        </div>
+      </div>
 
-      <!-- sidebar -->
-      <aside class="sidebar">
-        <div class="sbTop">
-          <div class="sbLogo">CH</div>
-          <div class="sbTitle">
-            <b>Chama</b>
-            <span id="sbRole" class="sbSub">—</span>
+      <nav class="nav">
+        <button class="navItem active" data-page="home">
+          <span class="navIcon">🏠</span><span>Início</span>
+        </button>
+        <button class="navItem" data-page="newTicket">
+          <span class="navIcon">➕</span><span>Abrir Chamado</span>
+        </button>
+        <button class="navItem" data-page="myTickets">
+          <span class="navIcon">🎫</span><span>Meus Chamados</span>
+        </button>
+        <button class="navItem" data-page="profile">
+          <span class="navIcon">👤</span><span>Perfil</span>
+        </button>
+      </nav>
+
+      <div class="sbBottom">
+        <div class="sbUser">
+          <span class="dot"></span>
+          <div>
+            <b id="sbUserName">—</b>
+            <small id="sbUserEmail">—</small>
           </div>
         </div>
+        <button class="btn ghost mini" id="btnLogout2">Sair</button>
+      </div>
+    </aside>
 
-        <nav class="sbNav" id="sbNav">
-          <!-- preenchido no JS -->
-        </nav>
-
-        <div class="sbBottom">
-          <div class="sbUser" id="sbUser">—</div>
-          <button class="sbLogout" id="btnLogout">Sair</button>
+    <section class="main">
+      <header class="topbar">
+        <div class="search">
+          <span>🔎</span>
+          <input id="globalSearch" placeholder="Buscar chamado..." />
         </div>
-      </aside>
+        <div class="hello">
+          <b id="helloName">Olá,</b>
+          <span id="helloSub">Aguardando…</span>
+        </div>
+      </header>
 
-      <!-- content -->
       <div class="content">
-        <header class="topbar">
-          <div class="search">
-            <span class="searchIcon">⌕</span>
-            <input id="searchInput" placeholder="Buscar chamado..." />
+
+        <!-- HOME -->
+        <section class="page" id="page_home">
+          <div class="grid4">
+            <div class="kpi">
+              <span>Chamados Abertos</span>
+              <b id="kpi_open">0</b>
+            </div>
+            <div class="kpi">
+              <span>Em Andamento</span>
+              <b id="kpi_prog">0</b>
+            </div>
+            <div class="kpi">
+              <span>Resolvidos</span>
+              <b id="kpi_res">0</b>
+            </div>
+            <div class="kpi">
+              <span>Status do suporte</span>
+              <b class="pillOk">Online</b>
+            </div>
           </div>
 
-          <div class="topRight">
-            <div class="hello" id="helloTxt">Olá</div>
+          <div class="grid2">
+            <div class="panelCard">
+              <div class="panelHead">
+                <b>Último chamado</b>
+                <span class="mutedSmall" id="lastTicketMeta">—</span>
+              </div>
+              <div class="panelBody" id="lastTicketBody">
+                <span class="mutedSmall">Nenhum chamado ainda.</span>
+              </div>
+            </div>
+
+            <div class="panelCard">
+              <div class="panelHead">
+                <b>Mensagem da empresa</b>
+                <span class="mutedSmall">Avisos</span>
+              </div>
+              <div class="panelBody">
+                <div class="msgBox">
+                  <b>📣 Sem mensagem cadastrada</b>
+                  <span class="mutedSmall">Depois o DEV poderá mandar comunicados aqui.</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </header>
+        </section>
 
-        <main class="main">
-          <!-- DASH -->
-          <section class="page" id="pageDashboard">
-            <div class="grid4">
-              <div class="statCard">
-                <span class="statLabel">Abertos</span>
-                <b class="statValue" id="stOpen">0</b>
-              </div>
-              <div class="statCard">
-                <span class="statLabel">Em andamento</span>
-                <b class="statValue" id="stDoing">0</b>
-              </div>
-              <div class="statCard">
-                <span class="statLabel">Resolvidos</span>
-                <b class="statValue" id="stDone">0</b>
-              </div>
-              <div class="statCard">
-                <span class="statLabel">Suporte</span>
-                <b class="statValue ok">Online</b>
-              </div>
-            </div>
+        <!-- NOVO CHAMADO -->
+        <section class="page hidden" id="page_newTicket">
+          <div class="pageTitle">
+            <b>Abrir Chamado</b>
+            <span class="mutedSmall">Ao enviar, a permissão de acesso remoto já fica liberada pro operador.</span>
+          </div>
 
-            <div class="grid2">
-              <div class="box">
-                <div class="boxHead">
-                  <b>Último chamado</b>
-                  <span class="mutedMini" id="lastTicketSub">—</span>
-                </div>
-                <div class="boxBody" id="lastTicketBox">
-                  <span class="mutedMini">Nenhum chamado ainda.</span>
-                </div>
-              </div>
-
-              <div class="box">
-                <div class="boxHead">
-                  <b>Mensagem da empresa</b>
-                  <span class="mutedMini">Avisos</span>
-                </div>
-                <div class="boxBody">
-                  <div class="pillSoft">Não há mensagem cadastrada.</div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <!-- ABRIR CHAMADO -->
-          <section class="page hidden" id="pageNewTicket">
-            <div class="pageTitleRow">
-              <h2>Abrir chamado</h2>
-              <span class="mutedMini">Ao enviar, o acesso remoto fica permitido automaticamente ✅</span>
-            </div>
-
+          <div class="panelCard">
             <div class="formGrid">
-              <div class="field2">
+              <div class="field">
                 <label>Título</label>
-                <input id="t_title" placeholder="Ex: Sistema não abre / Impressora travou" />
+                <input id="t_title" placeholder="Ex: Sistema não abre / erro ao acessar" />
               </div>
 
-              <div class="field2">
+              <div class="field">
                 <label>Categoria</label>
                 <select id="t_category">
-                  <option>Sistema</option>
-                  <option>Rede / Internet</option>
-                  <option>Impressora</option>
-                  <option>Hardware</option>
-                  <option>Outro</option>
+                  <option value="Sistema">Sistema</option>
+                  <option value="Impressora">Impressora</option>
+                  <option value="Rede/Internet">Rede/Internet</option>
+                  <option value="Hardware">Hardware</option>
+                  <option value="Outro">Outro</option>
                 </select>
               </div>
 
-              <div class="field2">
+              <div class="field">
                 <label>Prioridade</label>
                 <select id="t_priority">
-                  <option value="baixa">Baixa</option>
-                  <option value="media" selected>Média</option>
-                  <option value="alta">Alta</option>
+                  <option value="Baixa">Baixa</option>
+                  <option value="Média" selected>Média</option>
+                  <option value="Alta">Alta</option>
                 </select>
               </div>
 
-              <div class="field2 fieldFull">
+              <div class="field fieldFull">
                 <label>Descrição</label>
                 <textarea id="t_desc" rows="5" placeholder="Explique o problema com detalhes..."></textarea>
               </div>
 
-              <div class="field2 fieldFull">
-                <div class="consent">
-                  <span>🔒 Ao abrir este chamado, você autoriza o suporte a iniciar acesso remoto durante o atendimento.</span>
-                </div>
+              <div class="field fieldFull">
+                <label class="check">
+                  <input id="t_consent" type="checkbox" checked />
+                  <span>Ao abrir este chamado, autorizo acesso remoto durante o atendimento.</span>
+                </label>
+              </div>
 
-                <button class="btn primary" id="btnCreateTicket">Enviar chamado</button>
-                <p class="msg" id="newTicketMsg"></p>
+              <div class="field fieldFull">
+                <button class="btn primary" id="btnCreateTicket">Enviar Chamado</button>
+                <p class="msg" id="ticket_msg"></p>
               </div>
             </div>
-          </section>
+          </div>
+        </section>
 
-          <!-- MEUS CHAMADOS -->
-          <section class="page hidden" id="pageMyTickets">
-            <div class="pageTitleRow">
-              <h2>Meus chamados</h2>
+        <!-- MEUS CHAMADOS -->
+        <section class="page hidden" id="page_myTickets">
+          <div class="pageTitle rowBetween">
+            <div>
+              <b>Meus Chamados</b>
+              <span class="mutedSmall" id="ticketsCount">—</span>
+            </div>
+            <div class="filters">
+              <button class="chip active" data-filter="ALL">Todos</button>
+              <button class="chip" data-filter="OPEN">Abertos</button>
+              <button class="chip" data-filter="IN_PROGRESS">Andamento</button>
+              <button class="chip" data-filter="RESOLVED">Resolvidos</button>
+            </div>
+          </div>
 
-              <div class="tabs" id="ticketTabs">
-                <button class="tab active" data-filter="ALL">Todos</button>
-                <button class="tab" data-filter="ABERTO">Abertos</button>
-                <button class="tab" data-filter="ANDAMENTO">Andamento</button>
-                <button class="tab" data-filter="RESOLVIDO">Resolvidos</button>
+          <div class="grid2">
+            <div class="panelCard" id="ticketsList">
+              <div class="panelBody">
+                <span class="mutedSmall">Carregando...</span>
               </div>
             </div>
 
-            <div class="list" id="ticketList"></div>
-          </section>
-
-          <!-- CHAMADOS EMPRESA (OPERADOR) -->
-          <section class="page hidden" id="pageCompanyTickets">
-            <div class="pageTitleRow">
-              <h2>Chamados da empresa</h2>
-              <span class="mutedMini">Operador</span>
-            </div>
-
-            <div class="list" id="companyTicketList"></div>
-          </section>
-
-          <!-- DEV -->
-          <section class="page hidden" id="pageDev">
-            <div class="pageTitleRow">
-              <h2>Painel DEV</h2>
-              <span class="mutedMini">Gerar chaves de empresa</span>
-            </div>
-
-            <div class="box">
-              <div class="boxHead">
-                <b>Gerar nova chave</b>
-                <span class="mutedMini">válida para cadastro</span>
+            <div class="panelCard" id="ticketDetail">
+              <div class="panelHead">
+                <b>Detalhes</b>
+                <span class="mutedSmall">Selecione um chamado</span>
               </div>
-              <div class="boxBody">
-                <button class="btn primary" id="btnGenKey">Gerar chave</button>
-                <div class="keyOut" id="keyOut">—</div>
-                <p class="msg" id="devMsg"></p>
+              <div class="panelBody">
+                <span class="mutedSmall">Nada selecionado.</span>
               </div>
             </div>
-          </section>
+          </div>
+        </section>
 
-          <!-- PERFIL -->
-          <section class="page hidden" id="pageProfile">
-            <div class="pageTitleRow">
-              <h2>Perfil</h2>
-              <span class="mutedMini">Informações da conta</span>
+        <!-- PERFIL -->
+        <section class="page hidden" id="page_profile">
+          <div class="pageTitle">
+            <b>Perfil</b>
+            <span class="mutedSmall">Seus dados</span>
+          </div>
+
+          <div class="panelCard">
+            <div class="panelBody">
+              <div class="profileLine"><b>Usuário:</b> <span id="p_user">—</span></div>
+              <div class="profileLine"><b>Email:</b> <span id="p_email">—</span></div>
+              <div class="profileLine"><b>Nível:</b> <span id="p_role">—</span></div>
+              <div class="profileLine"><b>Empresa:</b> <span id="p_company">—</span></div>
+              <div class="divider"></div>
+              <button class="btn ghost" id="btnLogout3">Sair</button>
             </div>
+          </div>
+        </section>
 
-            <div class="box">
-              <div class="boxHead">
-                <b>Minha conta</b>
-                <span class="mutedMini" id="profileRole">—</span>
-              </div>
-              <div class="boxBody">
-                <div class="kv"><span>Usuário</span><b id="pfUser">—</b></div>
-                <div class="kv"><span>Email</span><b id="pfEmail">—</b></div>
-                <div class="kv"><span>Empresa</span><b id="pfCompany">—</b></div>
-              </div>
-            </div>
-          </section>
-
-        </main>
       </div>
     </section>
   </main>
