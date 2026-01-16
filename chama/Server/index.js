@@ -303,4 +303,61 @@ app.post("/api/forgot/send", (req, res) => {
             `
           });
 
-          return res.json({ ok: true, m
+          return res.json({ ok: true, message: "Email de recuperação enviado!" });
+        } catch (e) {
+          return res.status(500).json({ ok: false, message: "Falha ao enviar email (SMTP)." });
+        }
+      }
+    );
+  });
+});
+
+// ✅ Reset verify (token válido?)
+app.get("/api/reset/verify", (req, res) => {
+  const token = String(req.query?.token || "");
+  if (!token) return res.status(400).json({ ok: false, message: "Token inválido." });
+
+  db.get(`SELECT * FROM reset_tokens WHERE token=?`, [token], (err, row) => {
+    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
+    if (!row) return res.status(404).json({ ok: false, message: "Token não encontrado." });
+
+    if (row.used) return res.status(410).json({ ok: false, message: "Token já usado." });
+    if (Date.now() > row.expires_at) return res.status(410).json({ ok: false, message: "Token expirado." });
+
+    return res.json({ ok: true });
+  });
+});
+
+// ✅ Reset confirm (nova senha)
+app.post("/api/reset/confirm", async (req, res) => {
+  const token = String(req.body?.token || "");
+  const password = String(req.body?.password || "");
+  const confirm = String(req.body?.confirm || "");
+
+  if (!token || !password || !confirm) return res.status(400).json({ ok: false, message: "Dados inválidos." });
+  if (password.length < 6) return res.status(400).json({ ok: false, message: "Senha mínima: 6 caracteres." });
+  if (password !== confirm) return res.status(400).json({ ok: false, message: "As senhas não conferem." });
+
+  db.get(`SELECT * FROM reset_tokens WHERE token=?`, [token], async (err, row) => {
+    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
+    if (!row) return res.status(404).json({ ok: false, message: "Token inválido." });
+    if (row.used) return res.status(410).json({ ok: false, message: "Token já usado." });
+    if (Date.now() > row.expires_at) return res.status(410).json({ ok: false, message: "Token expirado." });
+
+    const hash = await bcrypt.hash(password, 10);
+
+    db.run(`UPDATE users SET password_hash=? WHERE id=?`, [hash, row.user_id], (err2) => {
+      if (err2) return res.status(500).json({ ok: false, message: "Erro ao atualizar senha." });
+
+      db.run(`UPDATE reset_tokens SET used=1 WHERE token=?`, [token], (err3) => {
+        if (err3) return res.status(500).json({ ok: false, message: "Erro ao finalizar reset." });
+
+        return res.json({ ok: true, message: "Senha atualizada com sucesso!" });
+      });
+    });
+  });
+});
+
+// ✅ Porta compatível com Render
+const PORT = process.env.PORT || 3333;
+app.listen(PORT, "0.0.0.0", () => console.log("✅ Server ON na porta " + PORT));
