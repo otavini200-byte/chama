@@ -1,248 +1,338 @@
-:root{
-  --bg0:#07080b;
-  --bg1:#0b0d12;
-  --card: rgba(18,20,28,.78);
-  --line: rgba(255,255,255,.10);
-  --text:#eef2ff;
-  --muted: rgba(255,255,255,.62);
-  --muted2: rgba(255,255,255,.42);
-  --accent:#6a4bc9;
-  --accent2:#3ebaff;
-  --danger:#ff4b92;
-  --ok:#2ee59d;
-  --shadow: 0 30px 90px rgba(0,0,0,.55);
-}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chama • Acesso</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
 
-*{margin:0;padding:0;box-sizing:border-box;font-family:Inter,Arial,sans-serif}
-body{background:var(--bg1);color:var(--text);min-height:100vh;overflow:hidden}
+<body>
+  <div class="bg"></div>
 
-.bg{
-  position:fixed;inset:0;
-  background:
-    radial-gradient(1200px 600px at 15% 10%, rgba(106,75,201,.35), transparent 60%),
-    radial-gradient(900px 550px at 90% 30%, rgba(62,186,255,.18), transparent 60%),
-    radial-gradient(800px 500px at 40% 95%, rgba(255,75,146,.12), transparent 60%),
-    linear-gradient(var(--bg0),var(--bg1));
-  filter:saturate(1.08);
-}
+  <main class="wrap">
+    <section class="card" id="authCard">
 
-.wrap{
-  position:relative;
-  min-height:100vh;
-  display:grid;
-  place-items:center;
-  padding:22px;
-}
+      <header class="brand">
+        <div class="logo">CH</div>
+        <div class="brandText">
+          <h1>Chama</h1>
+          <p>Sistema de Chamados & Acesso</p>
+        </div>
+      </header>
 
-.card{
-  width:min(460px, 94vw);
-  background:var(--card);
-  border:1px solid var(--line);
-  border-radius:24px;
-  padding:18px 18px 14px;
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(14px);
-  animation: pop .35s ease;
-}
+      <!-- LOGIN -->
+      <section id="screenLogin" class="screen">
+        <div class="field">
+          <label>Usuário ou Email</label>
+          <input id="login_login" placeholder="ex: otavio ou otavini200@gmail.com" autocomplete="username" />
+        </div>
 
-@keyframes pop{
-  from{transform:translateY(10px);opacity:.75}
-  to{transform:translateY(0);opacity:1}
-}
+        <div class="field">
+          <label>Senha</label>
+          <div class="inputIcon">
+            <input id="login_pass" type="password" placeholder="••••••••" autocomplete="current-password" />
+            <button class="iconBtn" id="btnEyeLogin" title="Ver senha">👁</button>
+          </div>
+        </div>
 
-.brand{
-  display:flex;
-  gap:12px;
-  align-items:center;
-  padding:4px 2px 12px;
-}
+        <div class="row">
+          <label class="check">
+            <input id="login_remember" type="checkbox" checked />
+            <span>Lembrar de mim</span>
+          </label>
 
-.logo{
-  width:48px;height:48px;border-radius:16px;
-  display:grid;place-items:center;
-  background:linear-gradient(135deg,var(--accent),var(--accent2));
-  font-weight:900;
-  letter-spacing:.5px;
-  box-shadow:0 16px 50px rgba(106,75,201,.35);
-}
+          <button class="linkBtn" id="btnForgot">Esqueci a senha</button>
+        </div>
 
-.brandText h1{font-size:18px;line-height:1.1}
-.brandText p{margin-top:2px;color:var(--muted);font-size:12px}
+        <button class="btn primary" id="btnLogin">Entrar</button>
+        <p class="msg" id="login_msg"></p>
 
-.screen{padding:2px 2px 10px}
-.hidden{display:none}
+        <div class="bottomActions">
+          <span class="muted">Não tem conta?</span>
+          <button class="btn ghost" id="btnGoSignup">Criar conta</button>
+        </div>
+      </section>
 
-.field{margin:10px 0 0}
-label{
-  display:block;
-  color:var(--muted);
-  font-size:12px;
-  margin:0 0 6px;
-}
+      <!-- SIGNUP -->
+      <section id="screenSignup" class="screen hidden">
+        <div class="screenTop">
+          <button class="btn ghost mini" id="btnBackFromSignup">← Voltar</button>
+          <span class="smallTop">Criar conta</span>
+        </div>
 
-input,select{
-  width:100%;
-  padding:12px 12px;
-  border-radius:16px;
-  background:rgba(0,0,0,.28);
-  border:1px solid var(--line);
-  outline:none;
-  color:var(--text);
-}
-input:focus,select:focus{
-  border-color:rgba(106,75,201,.65);
-  box-shadow:0 0 0 3px rgba(106,75,201,.16);
-}
+        <div class="pill">
+          <span>🔑 A chave da empresa é usada só aqui na criação.</span>
+        </div>
 
-.inputIcon{position:relative}
-.iconBtn{
-  position:absolute;
-  right:8px;
-  top:50%;
-  transform:translateY(-50%);
-  width:42px;height:42px;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.10);
-  background:rgba(255,255,255,.06);
-  color:var(--text);
-  cursor:pointer;
-}
-.iconBtn:active{transform:translateY(-50%) scale(.98)}
+        <div class="field">
+          <label>Chave da Empresa</label>
+          <input id="su_key" placeholder="Ex: ABCD-1234-EFGH" />
+        </div>
 
-.hint{
-  position:absolute;
-  right:54px;
-  top:50%;
-  transform:translateY(-50%);
-  font-size:12px;
-  color:var(--muted2);
-}
+        <div class="field">
+          <label>Usuário (único)</label>
+          <div class="inputIcon">
+            <input id="su_user" placeholder="Ex: otavio_cliente" />
+            <span class="hint" id="su_hint">Digite para verificar…</span>
+          </div>
+        </div>
 
-.row{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin:12px 0 8px;
-}
+        <div class="field">
+          <label>Email</label>
+          <input id="su_email" type="email" placeholder="seuemail@gmail.com" />
+        </div>
 
-.check{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  font-size:12px;
-  color:var(--muted);
-}
-.check input{width:16px;height:16px}
+        <div class="field">
+          <label>Senha</label>
+          <div class="inputIcon">
+            <input id="su_pass" type="password" placeholder="mín. 6 caracteres" />
+            <button class="iconBtn" id="btnEyeSuPass" title="Ver senha">👁</button>
+          </div>
+        </div>
 
-.linkBtn{
-  border:none;
-  background:transparent;
-  color:rgba(62,186,255,.92);
-  cursor:pointer;
-  font-weight:800;
-  font-size:12px;
-}
-.linkBtn:hover{text-decoration:underline}
+        <div class="field">
+          <label>Confirmar Senha</label>
+          <div class="inputIcon">
+            <input id="su_confirm" type="password" placeholder="repete a senha" />
+            <button class="iconBtn" id="btnEyeSuConfirm" title="Ver senha">👁</button>
+          </div>
+        </div>
 
-.btn{
-  width:100%;
-  padding:12px 14px;
-  border:none;
-  cursor:pointer;
-  border-radius:18px;
-  font-weight:900;
-  color:var(--text);
-  transition:.1s ease;
-  margin-top:10px;
-}
-.btn:active{transform:scale(.99)}
-.btn.primary{
-  background:linear-gradient(135deg,var(--accent),var(--accent2));
-  box-shadow:0 18px 60px rgba(106,75,201,.25);
-}
-.btn.ghost{
-  background:transparent;
-  border:1px solid rgba(255,255,255,.12);
-  box-shadow:none;
-}
-.btn.mini{width:auto;padding:10px 12px;border-radius:14px;margin-top:0}
+        <div class="field">
+          <label>Tipo de Conta</label>
+          <select id="su_role">
+            <option value="client">Cliente</option>
+            <option value="operator">Operador</option>
+          </select>
+        </div>
 
-.msg{
-  margin-top:10px;
-  min-height:18px;
-  color:var(--muted);
-  font-size:12px;
-}
+        <button class="btn primary" id="btnSignup">Criar conta</button>
+        <p class="msg" id="signup_msg"></p>
+      </section>
 
-.pill{
-  padding:10px 12px;
-  border-radius:16px;
-  background:rgba(106,75,201,.12);
-  border:1px solid rgba(106,75,201,.25);
-  color:rgba(255,255,255,.75);
-  font-size:12px;
-  margin-top:6px;
-}
+      <!-- FORGOT -->
+      <section id="screenForgot" class="screen hidden">
+        <div class="screenTop">
+          <button class="btn ghost mini" id="btnBackFromForgot">← Voltar</button>
+          <span class="smallTop">Recuperação</span>
+        </div>
 
-.divider{
-  height:1px;
-  background:rgba(255,255,255,.08);
-  margin:12px 0;
-}
+        <div class="pill">
+          <span>📩 Vamos mandar um link de recuperação no seu email.</span>
+        </div>
 
-.bottomActions{
-  margin-top:14px;
-  display:flex;
-  gap:10px;
-  align-items:center;
-  justify-content:space-between;
-}
-.bottomActions .muted{color:var(--muted);font-size:12px}
-.bottomActions .btn{margin-top:0}
+        <div class="field">
+          <label>Email</label>
+          <input id="fg_email" type="email" placeholder="seuemail@gmail.com" />
+        </div>
 
-.screenTop{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  margin-bottom:8px;
-}
-.smallTop{color:var(--muted);font-weight:800;font-size:12px}
+        <button class="btn primary" id="btnSendForgot">Enviar link</button>
+        <p class="msg" id="forgot_msg"></p>
+      </section>
+    </section>
 
-.dashTop{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  gap:12px;
-}
-.dashTitle{font-size:16px}
-.dashSub{color:var(--muted);font-size:12px;margin-top:4px}
+    <!-- ✅ APP SHELL (painel) -->
+    <section class="app hidden" id="appShell">
 
-.cards{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap:10px;
-}
-.miniCard{
-  padding:12px;
-  border-radius:18px;
-  background:rgba(0,0,0,.22);
-  border:1px solid rgba(255,255,255,.10);
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-}
-.miniCard b{font-size:12px;color:var(--muted)}
-.tag{
-  padding:5px 10px;
-  border-radius:999px;
-  border:1px solid rgba(255,255,255,.10);
-  background:rgba(255,255,255,.04);
-  font-size:12px;
-  color:rgba(255,255,255,.80);
-}
-.tag.ok{
-  border-color:rgba(46,229,157,.40);
-  background:rgba(46,229,157,.10);
-  color:rgba(46,229,157,.95);
-}
+      <!-- sidebar -->
+      <aside class="sidebar">
+        <div class="sbTop">
+          <div class="sbLogo">CH</div>
+          <div class="sbTitle">
+            <b>Chama</b>
+            <span id="sbRole" class="sbSub">—</span>
+          </div>
+        </div>
+
+        <nav class="sbNav" id="sbNav">
+          <!-- preenchido no JS -->
+        </nav>
+
+        <div class="sbBottom">
+          <div class="sbUser" id="sbUser">—</div>
+          <button class="sbLogout" id="btnLogout">Sair</button>
+        </div>
+      </aside>
+
+      <!-- content -->
+      <div class="content">
+        <header class="topbar">
+          <div class="search">
+            <span class="searchIcon">⌕</span>
+            <input id="searchInput" placeholder="Buscar chamado..." />
+          </div>
+
+          <div class="topRight">
+            <div class="hello" id="helloTxt">Olá</div>
+          </div>
+        </header>
+
+        <main class="main">
+          <!-- DASH -->
+          <section class="page" id="pageDashboard">
+            <div class="grid4">
+              <div class="statCard">
+                <span class="statLabel">Abertos</span>
+                <b class="statValue" id="stOpen">0</b>
+              </div>
+              <div class="statCard">
+                <span class="statLabel">Em andamento</span>
+                <b class="statValue" id="stDoing">0</b>
+              </div>
+              <div class="statCard">
+                <span class="statLabel">Resolvidos</span>
+                <b class="statValue" id="stDone">0</b>
+              </div>
+              <div class="statCard">
+                <span class="statLabel">Suporte</span>
+                <b class="statValue ok">Online</b>
+              </div>
+            </div>
+
+            <div class="grid2">
+              <div class="box">
+                <div class="boxHead">
+                  <b>Último chamado</b>
+                  <span class="mutedMini" id="lastTicketSub">—</span>
+                </div>
+                <div class="boxBody" id="lastTicketBox">
+                  <span class="mutedMini">Nenhum chamado ainda.</span>
+                </div>
+              </div>
+
+              <div class="box">
+                <div class="boxHead">
+                  <b>Mensagem da empresa</b>
+                  <span class="mutedMini">Avisos</span>
+                </div>
+                <div class="boxBody">
+                  <div class="pillSoft">Não há mensagem cadastrada.</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ABRIR CHAMADO -->
+          <section class="page hidden" id="pageNewTicket">
+            <div class="pageTitleRow">
+              <h2>Abrir chamado</h2>
+              <span class="mutedMini">Ao enviar, o acesso remoto fica permitido automaticamente ✅</span>
+            </div>
+
+            <div class="formGrid">
+              <div class="field2">
+                <label>Título</label>
+                <input id="t_title" placeholder="Ex: Sistema não abre / Impressora travou" />
+              </div>
+
+              <div class="field2">
+                <label>Categoria</label>
+                <select id="t_category">
+                  <option>Sistema</option>
+                  <option>Rede / Internet</option>
+                  <option>Impressora</option>
+                  <option>Hardware</option>
+                  <option>Outro</option>
+                </select>
+              </div>
+
+              <div class="field2">
+                <label>Prioridade</label>
+                <select id="t_priority">
+                  <option value="baixa">Baixa</option>
+                  <option value="media" selected>Média</option>
+                  <option value="alta">Alta</option>
+                </select>
+              </div>
+
+              <div class="field2 fieldFull">
+                <label>Descrição</label>
+                <textarea id="t_desc" rows="5" placeholder="Explique o problema com detalhes..."></textarea>
+              </div>
+
+              <div class="field2 fieldFull">
+                <div class="consent">
+                  <span>🔒 Ao abrir este chamado, você autoriza o suporte a iniciar acesso remoto durante o atendimento.</span>
+                </div>
+
+                <button class="btn primary" id="btnCreateTicket">Enviar chamado</button>
+                <p class="msg" id="newTicketMsg"></p>
+              </div>
+            </div>
+          </section>
+
+          <!-- MEUS CHAMADOS -->
+          <section class="page hidden" id="pageMyTickets">
+            <div class="pageTitleRow">
+              <h2>Meus chamados</h2>
+
+              <div class="tabs" id="ticketTabs">
+                <button class="tab active" data-filter="ALL">Todos</button>
+                <button class="tab" data-filter="ABERTO">Abertos</button>
+                <button class="tab" data-filter="ANDAMENTO">Andamento</button>
+                <button class="tab" data-filter="RESOLVIDO">Resolvidos</button>
+              </div>
+            </div>
+
+            <div class="list" id="ticketList"></div>
+          </section>
+
+          <!-- CHAMADOS EMPRESA (OPERADOR) -->
+          <section class="page hidden" id="pageCompanyTickets">
+            <div class="pageTitleRow">
+              <h2>Chamados da empresa</h2>
+              <span class="mutedMini">Operador</span>
+            </div>
+
+            <div class="list" id="companyTicketList"></div>
+          </section>
+
+          <!-- DEV -->
+          <section class="page hidden" id="pageDev">
+            <div class="pageTitleRow">
+              <h2>Painel DEV</h2>
+              <span class="mutedMini">Gerar chaves de empresa</span>
+            </div>
+
+            <div class="box">
+              <div class="boxHead">
+                <b>Gerar nova chave</b>
+                <span class="mutedMini">válida para cadastro</span>
+              </div>
+              <div class="boxBody">
+                <button class="btn primary" id="btnGenKey">Gerar chave</button>
+                <div class="keyOut" id="keyOut">—</div>
+                <p class="msg" id="devMsg"></p>
+              </div>
+            </div>
+          </section>
+
+          <!-- PERFIL -->
+          <section class="page hidden" id="pageProfile">
+            <div class="pageTitleRow">
+              <h2>Perfil</h2>
+              <span class="mutedMini">Informações da conta</span>
+            </div>
+
+            <div class="box">
+              <div class="boxHead">
+                <b>Minha conta</b>
+                <span class="mutedMini" id="profileRole">—</span>
+              </div>
+              <div class="boxBody">
+                <div class="kv"><span>Usuário</span><b id="pfUser">—</b></div>
+                <div class="kv"><span>Email</span><b id="pfEmail">—</b></div>
+                <div class="kv"><span>Empresa</span><b id="pfCompany">—</b></div>
+              </div>
+            </div>
+          </section>
+
+        </main>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>
