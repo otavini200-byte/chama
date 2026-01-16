@@ -12,7 +12,7 @@ app.use(cors({ origin: "*", methods: ["GET", "POST", "OPTIONS"], allowedHeaders:
 app.use(express.json());
 
 // ✅ Servir o painel do técnico quando abrir a URL do Render no navegador
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "Public")));
 
 // ✅ Banco SQLite local
 const DB_PATH = path.join(__dirname, "db.sqlite");
@@ -89,3 +89,4 @@ app.get("/api/me", (req, res) => {
 // ✅ PORT compatível com Render (obrigatório)
 const PORT = process.env.PORT || 3333;
 app.listen(PORT, "0.0.0.0", () => console.log("✅ Server ON na porta " + PORT));
+
