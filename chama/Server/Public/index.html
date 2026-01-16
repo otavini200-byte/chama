@@ -21,7 +21,7 @@
         </div>
       </header>
 
-      <!-- ✅ LOGIN (TELA PRINCIPAL) -->
+      <!-- ✅ LOGIN -->
       <section id="screenLogin" class="screen">
         <div class="field">
           <label>Usuário ou Email</label>
@@ -32,7 +32,7 @@
           <label>Senha</label>
           <div class="inputIcon">
             <input id="login_pass" type="password" placeholder="••••••••" autocomplete="current-password" />
-            <button class="iconBtn" onclick="UI.togglePass('login_pass')" title="Ver senha">👁</button>
+            <button class="iconBtn" id="btnEyeLogin" title="Ver senha">👁</button>
           </div>
         </div>
 
@@ -42,24 +42,24 @@
             <span>Lembrar de mim</span>
           </label>
 
-          <!-- ✅ Esqueci a senha -->
-          <button class="linkBtn" onclick="UI.show('screenForgot')">Esqueci a senha</button>
+          <!-- ✅ ESQUECI SENHA -->
+          <button class="linkBtn" id="btnForgot">Esqueci a senha</button>
         </div>
 
-        <button class="btn primary" onclick="API.login()">Entrar</button>
+        <button class="btn primary" id="btnLogin">Entrar</button>
         <p class="msg" id="login_msg"></p>
 
-        <!-- ✅ Criar conta embaixo -->
+        <!-- ✅ CRIAR CONTA embaixo -->
         <div class="bottomActions">
           <span class="muted">Não tem conta?</span>
-          <button class="btn ghost" onclick="UI.show('screenSignup')">Criar conta</button>
+          <button class="btn ghost" id="btnGoSignup">Criar conta</button>
         </div>
       </section>
 
       <!-- ✅ CRIAR CONTA (COM CHAVE) -->
       <section id="screenSignup" class="screen hidden">
         <div class="screenTop">
-          <button class="btn ghost mini" onclick="UI.show('screenLogin')">← Voltar</button>
+          <button class="btn ghost mini" id="btnBackFromSignup">← Voltar</button>
           <span class="smallTop">Criar conta</span>
         </div>
 
@@ -75,7 +75,7 @@
         <div class="field">
           <label>Usuário (único)</label>
           <div class="inputIcon">
-            <input id="su_user" placeholder="Ex: otavio" oninput="API.checkUsername()" />
+            <input id="su_user" placeholder="Ex: otavio" />
             <span class="hint" id="su_hint">Digite para verificar…</span>
           </div>
         </div>
@@ -89,7 +89,7 @@
           <label>Senha</label>
           <div class="inputIcon">
             <input id="su_pass" type="password" placeholder="mín. 6 caracteres" />
-            <button class="iconBtn" onclick="UI.togglePass('su_pass')" title="Ver senha">👁</button>
+            <button class="iconBtn" id="btnEyeSuPass" title="Ver senha">👁</button>
           </div>
         </div>
 
@@ -97,7 +97,7 @@
           <label>Confirmar Senha</label>
           <div class="inputIcon">
             <input id="su_confirm" type="password" placeholder="repete a senha" />
-            <button class="iconBtn" onclick="UI.togglePass('su_confirm')" title="Ver senha">👁</button>
+            <button class="iconBtn" id="btnEyeSuConfirm" title="Ver senha">👁</button>
           </div>
         </div>
 
@@ -109,14 +109,14 @@
           </select>
         </div>
 
-        <button class="btn primary" onclick="API.signup()">Criar conta</button>
+        <button class="btn primary" id="btnSignup">Criar conta</button>
         <p class="msg" id="signup_msg"></p>
       </section>
 
-      <!-- ✅ ESQUECI A SENHA -->
+      <!-- ✅ ESQUECI SENHA -->
       <section id="screenForgot" class="screen hidden">
         <div class="screenTop">
-          <button class="btn ghost mini" onclick="UI.show('screenLogin')">← Voltar</button>
+          <button class="btn ghost mini" id="btnBackFromForgot">← Voltar</button>
           <span class="smallTop">Recuperação</span>
         </div>
 
@@ -129,7 +129,7 @@
           <input id="fg_email" type="email" placeholder="otavini200@gmail.com" />
         </div>
 
-        <button class="btn primary" onclick="API.forgot()">Enviar link</button>
+        <button class="btn primary" id="btnSendForgot">Enviar link</button>
         <p class="msg" id="forgot_msg"></p>
       </section>
 
@@ -140,7 +140,7 @@
             <h2 class="dashTitle">✅ Logado</h2>
             <p class="dashSub" id="dash_me">Carregando…</p>
           </div>
-          <button class="btn ghost mini" onclick="API.logout()">Sair</button>
+          <button class="btn ghost mini" id="btnLogout">Sair</button>
         </div>
 
         <div class="divider"></div>
@@ -157,6 +157,9 @@
           </div>
         </div>
 
+        <div class="divider"></div>
+
+        <p class="small">✅ Base pronta. Agora a gente segue pro painel do operador e chamados.</p>
       </section>
 
     </section>
