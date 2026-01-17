@@ -7,7 +7,7 @@ const jwt = require("jsonwebtoken");
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "6mb" }));
+app.use(express.json({ limit: "8mb" }));
 
 /**
  * ✅ CONFIG
@@ -15,6 +15,8 @@ app.use(express.json({ limit: "6mb" }));
 const PORT = process.env.PORT || 10000;
 const JWT_SECRET = process.env.JWT_SECRET || "CHAMA_SECRET_DEV_ONLY";
 const DB_PATH = path.join(__dirname, "db.sqlite");
+const COMPANY_DAYS = 31;
+const MS_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * ✅ STATIC (Public com P maiúsculo)
@@ -28,6 +30,8 @@ const db = new sqlite3.Database(DB_PATH);
 
 // ---------- helpers ----------
 function nowMs() { return Date.now(); }
+function addDays(ms, days) { return ms + days * MS_DAY; }
+
 function safeText(v, max = 4000) {
   if (v === null || v === undefined) return "";
   const s = String(v).trim();
@@ -39,6 +43,14 @@ function normalizeLogin(v) {
 function signToken(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "30d" });
 }
+
+function genCompanyKey(len = 10) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
 function auth(req, res, next) {
   const h = req.headers.authorization || "";
   const token = h.startsWith("Bearer ") ? h.slice(7) : "";
@@ -46,11 +58,31 @@ function auth(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+
     db.get(
-      `SELECT id, company_id, username, email, role FROM users WHERE id=?`,
+      `
+      SELECT 
+        u.id, u.company_id, u.username, u.email, u.role,
+        c.company_key as company_key,
+        c.expires_at as company_expires_at
+      FROM users u
+      LEFT JOIN companies c ON c.id = u.company_id
+      WHERE u.id = ?
+      `,
       [decoded.id],
       (err, row) => {
         if (err || !row) return res.status(401).json({ ok: false, message: "Token inválido" });
+
+        // ✅ bloqueia conta de empresa vencida (não bloqueia DEV)
+        if (row.role !== "dev" && row.company_id) {
+          if (row.company_expires_at && Number(row.company_expires_at) < nowMs()) {
+            return res.status(403).json({
+              ok: false,
+              message: "Empresa vencida. Fale com o administrador para renovar."
+            });
+          }
+        }
+
         req.user = row;
         next();
       }
@@ -59,17 +91,12 @@ function auth(req, res, next) {
     return res.status(401).json({ ok: false, message: "Token inválido" });
   }
 }
+
 function devOnly(req, res, next) {
   if (!req.user || req.user.role !== "dev") {
     return res.status(403).json({ ok: false, message: "Acesso DEV somente." });
   }
   next();
-}
-function genCompanyKey(len = 10) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let out = "";
-  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
 }
 
 // ---------- create tables ----------
@@ -78,7 +105,8 @@ db.serialize(() => {
     CREATE TABLE IF NOT EXISTS companies (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       company_key TEXT UNIQUE,
-      created_at INTEGER
+      created_at INTEGER,
+      expires_at INTEGER
     )
   `);
 
@@ -125,10 +153,23 @@ db.serialize(() => {
   `);
 
   // ✅ migrations safe
+  db.run(`ALTER TABLE companies ADD COLUMN expires_at INTEGER`, () => {});
   db.run(`ALTER TABLE tickets ADD COLUMN scan_json TEXT`, () => {});
   db.run(`ALTER TABLE tickets ADD COLUMN assigned_operator_id INTEGER`, () => {});
   db.run(`ALTER TABLE tickets ADD COLUMN claimed_at INTEGER`, () => {});
   db.run(`ALTER TABLE tickets ADD COLUMN resolved_at INTEGER`, () => {});
+
+  // ✅ se existe empresa sem expires_at, seta +31 dias
+  db.all(`SELECT id, created_at, expires_at FROM companies`, [], (err, rows) => {
+    if (err || !rows) return;
+    rows.forEach((c) => {
+      if (!c.expires_at) {
+        const created = c.created_at || nowMs();
+        const exp = addDays(created, COMPANY_DAYS);
+        db.run(`UPDATE companies SET expires_at=? WHERE id=?`, [exp, c.id]);
+      }
+    });
+  });
 
   // ✅ cria DEV user (se não existir)
   const devUser = "otavio";
@@ -172,9 +213,7 @@ app.post("/api/check-username", (req, res) => {
 });
 
 /**
- * ✅ SIGNUP (AGORA EXIGE CHAVE EXISTENTE)
- * - Cliente/Operador NÃO cria empresa
- * - Somente DEV cria empresa/chave
+ * ✅ SIGNUP (EXIGE CHAVE EXISTENTE)
  */
 app.post("/api/signup", (req, res) => {
   const company_key = safeText(req.body?.company_key, 80).toUpperCase();
@@ -190,15 +229,17 @@ app.post("/api/signup", (req, res) => {
   if (password.length < 6) return res.status(400).json({ ok: false, message: "Senha mínima: 6 caracteres." });
   if (password !== confirm) return res.status(400).json({ ok: false, message: "Senhas não conferem." });
 
-  const created = nowMs();
-
-  db.get(`SELECT id FROM companies WHERE company_key=?`, [company_key], async (err, c) => {
+  db.get(`SELECT id, expires_at FROM companies WHERE company_key=?`, [company_key], async (err, c) => {
     if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
 
     if (!c?.id) {
       return res.status(401).json({ ok: false, message: "Chave da empresa inválida ou não cadastrada." });
     }
+    if (c.expires_at && Number(c.expires_at) < nowMs()) {
+      return res.status(403).json({ ok: false, message: "Empresa vencida. Peça renovação ao DEV." });
+    }
 
+    const created = nowMs();
     const hash = await bcrypt.hash(password, 10);
 
     db.run(
@@ -224,12 +265,25 @@ app.post("/api/login", (req, res) => {
   if (!login || !password) return res.status(400).json({ ok: false, message: "Preencha tudo." });
 
   db.get(
-    `SELECT id, company_id, username, email, password_hash, role FROM users WHERE username=? OR email=?`,
+    `
+    SELECT 
+      u.id, u.company_id, u.username, u.email, u.password_hash, u.role,
+      c.expires_at as company_expires_at
+    FROM users u
+    LEFT JOIN companies c ON c.id = u.company_id
+    WHERE u.username=? OR u.email=?
+    `,
     [login, login],
     async (err, row) => {
       if (err || !row) return res.status(401).json({ ok: false, message: "Login inválido." });
+
       const ok = await bcrypt.compare(password, row.password_hash);
       if (!ok) return res.status(401).json({ ok: false, message: "Login inválido." });
+
+      // ✅ bloqueia empresa vencida (exceto DEV)
+      if (row.role !== "dev" && row.company_id && row.company_expires_at && Number(row.company_expires_at) < nowMs()) {
+        return res.status(403).json({ ok: false, message: "Empresa vencida. Fale com o DEV." });
+      }
 
       const token = signToken({ id: row.id });
       return res.json({
@@ -246,8 +300,7 @@ app.get("/api/me", auth, (req, res) => {
 });
 
 /**
- * ✅ FORGOT (por enquanto simulado — só pra não quebrar o app)
- * Depois a gente coloca envio real de email via SMTP/SendGrid etc.
+ * ✅ FORGOT (simulado por enquanto)
  */
 app.post("/api/forgot/send", (req, res) => {
   const email = normalizeLogin(req.body?.email);
@@ -256,53 +309,8 @@ app.post("/api/forgot/send", (req, res) => {
   db.get(`SELECT id, username FROM users WHERE email=?`, [email], (err, u) => {
     if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
 
-    // ✅ não revela se existe ou não (boa prática)
-    console.log("🔐 Forgot solicitado para:", email, "user:", u?.username || "N/A");
-
+    console.log("🔐 Forgot solicitado:", email, "user:", u?.username || "N/A");
     return res.json({ ok: true, message: "Se o email existir, enviamos instruções." });
-  });
-});
-
-/**
- * ✅ USER SETTINGS
- */
-app.post("/api/user/change-email", auth, (req, res) => {
-  const u = req.user;
-  const newEmail = normalizeLogin(req.body?.email);
-  if (!newEmail) return res.status(400).json({ ok: false, message: "Email inválido." });
-
-  db.get(`SELECT id FROM users WHERE email=?`, [newEmail], (err, row) => {
-    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
-    if (row) return res.status(409).json({ ok: false, message: "Esse email já está em uso." });
-
-    db.run(`UPDATE users SET email=? WHERE id=?`, [newEmail, u.id], (err2) => {
-      if (err2) return res.status(500).json({ ok: false, message: "Erro ao atualizar email." });
-      return res.json({ ok: true, message: "✅ Email atualizado!" });
-    });
-  });
-});
-
-app.post("/api/user/change-password", auth, (req, res) => {
-  const u = req.user;
-  const currentPassword = String(req.body?.currentPassword || "");
-  const newPassword = String(req.body?.newPassword || "");
-  const confirm = String(req.body?.confirm || "");
-
-  if (!currentPassword || !newPassword || !confirm) return res.status(400).json({ ok: false, message: "Preencha tudo." });
-  if (newPassword.length < 6) return res.status(400).json({ ok: false, message: "Senha mínima: 6 caracteres." });
-  if (newPassword !== confirm) return res.status(400).json({ ok: false, message: "As senhas não conferem." });
-
-  db.get(`SELECT password_hash FROM users WHERE id=?`, [u.id], async (err, row) => {
-    if (err || !row) return res.status(404).json({ ok: false, message: "Usuário não encontrado." });
-
-    const ok = await bcrypt.compare(currentPassword, row.password_hash);
-    if (!ok) return res.status(401).json({ ok: false, message: "Senha atual incorreta." });
-
-    const hash = await bcrypt.hash(newPassword, 10);
-    db.run(`UPDATE users SET password_hash=? WHERE id=?`, [hash, u.id], (err2) => {
-      if (err2) return res.status(500).json({ ok: false, message: "Erro ao atualizar senha." });
-      return res.json({ ok: true, message: "✅ Senha alterada!" });
-    });
   });
 });
 
@@ -324,7 +332,7 @@ app.post("/api/tickets/create", auth, (req, res) => {
   const scan = req.body?.scan || null;
 
   let scan_json = null;
-  try { scan_json = scan ? JSON.stringify(scan).slice(0, 60000) : null; } catch { scan_json = null; }
+  try { scan_json = scan ? JSON.stringify(scan).slice(0, 80000) : null; } catch { scan_json = null; }
 
   if (!title || !description) return res.status(400).json({ ok: false, message: "Preencha título e descrição." });
 
@@ -411,37 +419,6 @@ app.get("/api/tickets/:id", auth, (req, res) => {
           total_time_ms: totalMs
         }
       });
-    }
-  );
-});
-
-/**
- * ✅ REMOTO STATUS (placeholder)
- */
-app.post("/api/remote/:ticketId/start", auth, (req, res) => {
-  const u = req.user;
-  const ticketId = parseInt(req.params.ticketId, 10);
-  if (u.role !== "operator" && u.role !== "dev") return res.status(403).json({ ok: false, message: "Acesso negado." });
-
-  const now = nowMs();
-  db.run(`UPDATE remote_sessions SET status='ACTIVE', updated_at=? WHERE ticket_id=?`, [now, ticketId], (err) => {
-    if (err) return res.status(500).json({ ok: false, message: "Erro no remoto." });
-    return res.json({ ok: true, message: "✅ Remoto iniciado." });
-  });
-});
-
-app.post("/api/remote/:ticketId/close", auth, (req, res) => {
-  const u = req.user;
-  const ticketId = parseInt(req.params.ticketId, 10);
-  if (u.role !== "operator" && u.role !== "dev") return res.status(403).json({ ok: false, message: "Acesso negado." });
-
-  const now = nowMs();
-  db.run(
-    `UPDATE remote_sessions SET status='CLOSED', updated_at=?, closed_at=? WHERE ticket_id=?`,
-    [now, now, ticketId],
-    (err) => {
-      if (err) return res.status(500).json({ ok: false, message: "Erro no remoto." });
-      return res.json({ ok: true, message: "✅ Remoto encerrado." });
     }
   );
 });
@@ -553,28 +530,47 @@ app.post("/api/operator/tickets/:id/resolve", auth, (req, res) => {
 });
 
 /**
- * ✅ DEV
+ * ✅ DEV COMPANIES + ALERTAS (vence em 31 dias)
  */
 app.get("/api/dev/companies", auth, devOnly, (req, res) => {
+  const now = nowMs();
+
   const q = `
     SELECT
       c.id,
       c.company_key,
       c.created_at,
+      c.expires_at,
+
       (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id) as users_total,
       (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id AND u.role = 'client') as users_clients,
       (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id AND u.role = 'operator') as users_operators,
+
       (SELECT COUNT(*) FROM tickets t WHERE t.company_id = c.id) as tickets_total,
       (SELECT COUNT(*) FROM tickets t WHERE t.company_id = c.id AND t.status = 'OPEN') as tickets_open,
       (SELECT COUNT(*) FROM tickets t WHERE t.company_id = c.id AND t.status = 'IN_PROGRESS') as tickets_progress,
       (SELECT COUNT(*) FROM tickets t WHERE t.company_id = c.id AND t.status = 'RESOLVED') as tickets_resolved
     FROM companies c
-    ORDER BY c.created_at DESC
+    ORDER BY c.expires_at ASC
   `;
 
   db.all(q, [], (err, rows) => {
     if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
-    return res.json({ ok: true, companies: rows || [] });
+
+    const companies = (rows || []).map((c) => {
+      const exp = Number(c.expires_at || 0);
+      const days_left = exp ? Math.ceil((exp - now) / MS_DAY) : null;
+      const expired = exp && exp < now;
+      const expiring_soon = !expired && days_left !== null && days_left <= 7;
+      return { ...c, days_left, expired, expiring_soon };
+    });
+
+    const alerts = {
+      expired: companies.filter(x => x.expired).length,
+      expiring_soon: companies.filter(x => x.expiring_soon).length
+    };
+
+    return res.json({ ok: true, companies, alerts });
   });
 });
 
@@ -583,18 +579,36 @@ app.post("/api/dev/companies/create", auth, devOnly, (req, res) => {
   if (!key) key = genCompanyKey(10);
 
   const created = nowMs();
+  const expires_at = addDays(created, COMPANY_DAYS);
+
   db.run(
-    `INSERT INTO companies (company_key, created_at) VALUES (?,?)`,
-    [key, created],
+    `INSERT INTO companies (company_key, created_at, expires_at) VALUES (?,?,?)`,
+    [key, created, expires_at],
     function (err) {
       if (err) {
         const msg = String(err.message || "");
         if (msg.includes("UNIQUE")) return res.status(409).json({ ok: false, message: "Chave já existe, tente outra." });
         return res.status(500).json({ ok: false, message: "Erro ao criar empresa." });
       }
-      return res.json({ ok: true, message: "✅ Empresa criada!", company: { id: this.lastID, company_key: key, created_at: created } });
+      return res.json({
+        ok: true,
+        message: "✅ Empresa criada!",
+        company: { id: this.lastID, company_key: key, created_at: created, expires_at }
+      });
     }
   );
+});
+
+// ✅ renovar +31 dias a partir de HOJE
+app.post("/api/dev/companies/:id/renew", auth, devOnly, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const now = nowMs();
+  const newExp = addDays(now, COMPANY_DAYS);
+
+  db.run(`UPDATE companies SET expires_at=? WHERE id=?`, [newExp, id], (err) => {
+    if (err) return res.status(500).json({ ok: false, message: "Erro ao renovar." });
+    return res.json({ ok: true, message: "✅ Empresa renovada por 31 dias.", expires_at: newExp });
+  });
 });
 
 app.get("/api/dev/companies/:id/users", auth, devOnly, (req, res) => {
