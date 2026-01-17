@@ -1,643 +1,67 @@
 const express = require("express");
 const cors = require("cors");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
-const crypto = require("crypto");
-const nodemailer = require("nodemailer");
+const sqlite3 = require("sqlite3").verbose();
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 const app = express();
-app.use(cors({ origin: "*", methods: ["GET", "POST", "OPTIONS"], allowedHeaders: ["Content-Type", "Authorization"] }));
-app.use(express.json());
+app.use(cors());
+app.use(express.json({ limit: "4mb" }));
 
-// ✅ pasta Public (P MAIÚSCULO)
-const STATIC_DIR = path.join(__dirname, "Public");
-app.use(express.static(STATIC_DIR));
-app.get("/", (req, res) => res.sendFile(path.join(STATIC_DIR, "index.html")));
-
-// ✅ banco
+/**
+ * ✅ CONFIG
+ */
+const PORT = process.env.PORT || 10000;
+const JWT_SECRET = process.env.JWT_SECRET || "CHAMA_SECRET_DEV_ONLY";
 const DB_PATH = path.join(__dirname, "db.sqlite");
+
+/**
+ * ✅ STATIC (Public com P maiúsculo)
+ */
+app.use(express.static(path.join(__dirname, "Public")));
+
+/**
+ * ✅ DB
+ */
 const db = new sqlite3.Database(DB_PATH);
 
-// ✅ configs
-const JWT_SECRET = process.env.JWT_SECRET || "DEV_SECRET_CHANGE_ME";
-const APP_URL = process.env.APP_URL || "https://chama-3fxc.onrender.com";
-
-// ✅ SMTP
-const SMTP_HOST = process.env.SMTP_HOST || "";
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
-const SMTP_USER = process.env.SMTP_USER || "";
-const SMTP_PASS = process.env.SMTP_PASS || "";
-const FROM_EMAIL = process.env.FROM_EMAIL || SMTP_USER;
-
-function hasMailerConfig() {
-  return Boolean(SMTP_HOST && SMTP_USER && SMTP_PASS && FROM_EMAIL);
+// ---------- helpers ----------
+function nowMs() { return Date.now(); }
+function safeText(v, max = 4000) {
+  if (v === null || v === undefined) return "";
+  const s = String(v).trim();
+  return s.length > max ? s.slice(0, max) : s;
 }
-function createTransport() {
-  return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_PORT === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASS }
-  });
+function normalizeLogin(v) {
+  return safeText(v, 120).toLowerCase();
 }
 
-function normalizeKey(k) {
-  return String(k || "").trim().toUpperCase();
-}
-function normalizeUsername(u) {
-  return String(u || "").trim().toLowerCase();
-}
-function normalizeLogin(x) {
-  return String(x || "").trim().toLowerCase();
-}
-function safeText(x, max = 2000) {
-  return String(x || "").trim().slice(0, max);
+function signToken(payload) {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "30d" });
 }
 
 function auth(req, res, next) {
-  const authHeader = req.headers.authorization || "";
-  const token = authHeader.replace("Bearer ", "");
-  if (!token) return res.status(401).json({ ok: false, message: "Sem token." });
+  const h = req.headers.authorization || "";
+  const token = h.startsWith("Bearer ") ? h.slice(7) : "";
+  if (!token) return res.status(401).json({ ok: false, message: "Sem token" });
 
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
-    return next();
-  } catch {
-    return res.status(401).json({ ok: false, message: "Token inválido." });
-  }
-}
-function devOnly(req, res, next) {
-  if (req.user?.role !== "dev") return res.status(403).json({ ok: false, message: "Acesso DEV apenas." });
-  next();
-}
-function operatorOnly(req, res, next) {
-  if (req.user?.role !== "operator" && req.user?.role !== "dev") {
-    return res.status(403).json({ ok: false, message: "Acesso de operador apenas." });
-  }
-  next();
-}
-
-// ========= DB =========
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS companies (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      company_key TEXT UNIQUE,
-      created_at INTEGER
-    )
-  `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS company_keys (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      company_key TEXT UNIQUE,
-      active INTEGER DEFAULT 1,
-      created_at INTEGER
-    )
-  `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      company_id INTEGER,
-      username TEXT UNIQUE,
-      email TEXT UNIQUE,
-      password_hash TEXT,
-      role TEXT DEFAULT 'client', -- client | operator | dev
-      is_admin INTEGER DEFAULT 0,
-      created_at INTEGER
-    )
-  `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS reset_tokens (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      token TEXT UNIQUE,
-      expires_at INTEGER,
-      used INTEGER DEFAULT 0
-    )
-  `);
-
-  // ✅ CHAMADOS
-  db.run(`
-    CREATE TABLE IF NOT EXISTS tickets (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      company_id INTEGER,
-      user_id INTEGER,
-      title TEXT,
-      category TEXT,
-      priority TEXT,
-      description TEXT,
-      status TEXT DEFAULT 'OPEN', -- OPEN | IN_PROGRESS | RESOLVED
-      created_at INTEGER,
-      updated_at INTEGER
-    )
-  `);
-
-  // ✅ SESSÃO REMOTA (placeholder por enquanto)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS remote_sessions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      ticket_id INTEGER UNIQUE,
-      status TEXT DEFAULT 'ALLOWED', -- ALLOWED | ACTIVE | CLOSED
-      created_at INTEGER,
-      updated_at INTEGER,
-      closed_at INTEGER
-    )
-  `);
-});
-
-function createCompanyIfNeeded(company_key) {
-  return new Promise((resolve, reject) => {
-    db.get(`SELECT id FROM companies WHERE company_key=?`, [company_key], (err, row) => {
-      if (err) return reject(err);
-      if (row) return resolve(row.id);
-
-      db.run(
-        `INSERT INTO companies (company_key, created_at) VALUES (?,?)`,
-        [company_key, Date.now()],
-        function (err2) {
-          if (err2) return reject(err2);
-          resolve(this.lastID);
-        }
-      );
-    });
-  });
-}
-function isCompanyKeyValid(company_key) {
-  return new Promise((resolve) => {
+    const decoded = jwt.verify(token, JWT_SECRET);
     db.get(
-      `SELECT id FROM company_keys WHERE company_key=? AND active=1`,
-      [company_key],
-      (err, row) => resolve(!err && !!row)
-    );
-  });
-}
-function generatePrettyKey() {
-  const a = crypto.randomBytes(2).toString("hex").toUpperCase();
-  const b = crypto.randomBytes(2).toString("hex").toUpperCase();
-  const c = crypto.randomBytes(2).toString("hex").toUpperCase();
-  return `${a}-${b}-${c}`;
-}
-function createNewCompanyKey() {
-  const key = generatePrettyKey();
-  return new Promise((resolve, reject) => {
-    db.run(
-      `INSERT INTO company_keys (company_key, active, created_at) VALUES (?,?,?)`,
-      [key, 1, Date.now()],
-      function (err) {
-        if (err) return reject(err);
-        resolve(key);
-      }
-    );
-  });
-}
-
-/**
- * ✅ SEED DEV "OTAVIO"
- * - Se existir user com email DEV -> vira DEV e ganha username "otavio"
- * - Se já existir um "otavio" que NÃO é o email DEV -> renomeia pra otavio_old_ID
- * - Se não existir email DEV -> cria DEV do zero
- */
-async function seedDevAccount() {
-  const DEV_USERNAME = "otavio";
-  const DEV_EMAIL = "otavini200@gmail.com";
-  const DEV_PASSWORD = "26106867";
-
-  const hash = await bcrypt.hash(DEV_PASSWORD, 10);
-
-  db.get(`SELECT * FROM users WHERE email=?`, [DEV_EMAIL], (errEmail, userByEmail) => {
-    if (errEmail) return console.log("❌ seedDevAccount erro email:", errEmail);
-
-    db.get(`SELECT * FROM users WHERE username=?`, [DEV_USERNAME], (errUser, userByUsername) => {
-      if (errUser) return console.log("❌ seedDevAccount erro username:", errUser);
-
-      const renameOldOtavioIfNeeded = (done) => {
-        if (!userByUsername) return done();
-        if (userByEmail && userByUsername.id === userByEmail.id) return done();
-
-        const newName = `otavio_old_${userByUsername.id}`;
-        db.run(`UPDATE users SET username=? WHERE id=?`, [newName, userByUsername.id], (errRen) => {
-          if (errRen) return console.log("❌ Falha ao renomear antigo otavio:", errRen);
-          console.log(`✅ Usuário antigo 'otavio' renomeado para '${newName}'`);
-          done();
-        });
-      };
-
-      if (userByEmail) {
-        renameOldOtavioIfNeeded(() => {
-          db.run(
-            `UPDATE users SET username=?, role='dev', is_admin=1, password_hash=? WHERE id=?`,
-            [DEV_USERNAME, hash, userByEmail.id],
-            (errUp) => {
-              if (errUp) return console.log("❌ Falha ao transformar em DEV:", errUp);
-              console.log("✅ Conta DEV garantida via EMAIL:", DEV_EMAIL);
-            }
-          );
-        });
-        return;
-      }
-
-      renameOldOtavioIfNeeded(() => {
-        db.run(
-          `INSERT INTO users (company_id, username, email, password_hash, role, is_admin, created_at)
-           VALUES (NULL,?,?,?,?,?,?)`,
-          [DEV_USERNAME, DEV_EMAIL, hash, "dev", 1, Date.now()],
-          (errIns) => {
-            if (errIns) return console.log("❌ Falha ao criar conta DEV:", errIns);
-            console.log("✅ Conta DEV criada do zero:", DEV_USERNAME, DEV_EMAIL);
-          }
-        );
-      });
-    });
-  });
-}
-
-// ========= API =========
-app.get("/api/health", (req, res) => {
-  res.json({ ok: true, service: "chama-server", time: new Date().toISOString() });
-});
-
-// ✅ DEV: gerar chave válida
-app.post("/api/dev/key/new", auth, devOnly, async (req, res) => {
-  try {
-    const key = await createNewCompanyKey();
-    return res.json({ ok: true, company_key: key });
-  } catch {
-    return res.status(500).json({ ok: false, message: "Falha ao gerar chave." });
-  }
-});
-
-// ✅ check username
-app.post("/api/check-username", (req, res) => {
-  const username = normalizeUsername(req.body?.username);
-  if (!username) return res.status(400).json({ ok: false, message: "Usuário inválido." });
-
-  db.get(`SELECT id FROM users WHERE username=?`, [username], (err, row) => {
-    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
-    return res.json({ ok: true, available: !row });
-  });
-});
-
-// ✅ signup (SEM DEV + chave válida + username reservado)
-app.post("/api/signup", async (req, res) => {
-  try {
-    const company_key = normalizeKey(req.body?.company_key);
-    const username = normalizeUsername(req.body?.username);
-    const email = normalizeLogin(req.body?.email);
-    const password = String(req.body?.password || "");
-    const confirm = String(req.body?.confirm || "");
-
-    // ✅ username reservado pro DEV
-    if (username === "otavio") return res.status(403).json({ ok: false, message: "Usuário reservado." });
-
-    // ✅ bloqueio DEV
-    if (String(req.body?.role || "").toLowerCase() === "dev") {
-      return res.status(403).json({ ok: false, message: "Nível DEV é exclusivo." });
-    }
-
-    // ✅ role permitido
-    const role = req.body?.role === "operator" ? "operator" : "client";
-
-    if (!company_key || !username || !email || !password || !confirm) {
-      return res.status(400).json({ ok: false, message: "Preencha tudo." });
-    }
-    if (password.length < 6) return res.status(400).json({ ok: false, message: "Senha mínima: 6 caracteres." });
-    if (password !== confirm) return res.status(400).json({ ok: false, message: "As senhas não conferem." });
-
-    const valid = await isCompanyKeyValid(company_key);
-    if (!valid) return res.status(403).json({ ok: false, message: "Chave de empresa inválida ou inativa." });
-
-    const companyId = await createCompanyIfNeeded(company_key);
-
-    const userExists = await new Promise((resolve) => {
-      db.get(`SELECT id FROM users WHERE username=?`, [username], (err, row) => resolve(!!row));
-    });
-    if (userExists) return res.status(409).json({ ok: false, message: "Usuário indisponível." });
-
-    const emailExists = await new Promise((resolve) => {
-      db.get(`SELECT id FROM users WHERE email=?`, [email], (err, row) => resolve(!!row));
-    });
-    if (emailExists) return res.status(409).json({ ok: false, message: "Email já cadastrado." });
-
-    const hash = await bcrypt.hash(password, 10);
-
-    db.run(
-      `INSERT INTO users (company_id, username, email,
- 
-         password_hash, role, is_admin, created_at)
-       VALUES (?,?,?,?,?,?,?)`,
-      [companyId, username, email, hash, role, 0, Date.now()],
-      function (err) {
-        if (err) return res.status(500).json({ ok: false, message: "Erro ao criar conta." });
-        return res.json({ ok: true, message: "Conta criada com sucesso!" });
+      `SELECT id, company_id, username, email, role FROM users WHERE id=?`,
+      [decoded.id],
+      (err, row) => {
+        if (err || !row) return res.status(401).json({ ok: false, message: "Token inválido" });
+        req.user = row;
+        next();
       }
     );
   } catch {
-    return res.status(500).json({ ok: false, message: "Erro no servidor." });
+    return res.status(401).json({ ok: false, message: "Token inválido" });
   }
-});
+}
 
-// ✅ login
-app.post("/api/login", (req, res) => {
-  const login = normalizeLogin(req.body?.login);
-  const password = String(req.body?.password || "");
-
-  if (!login || !password) return res.status(400).json({ ok: false, message: "Digite usuário/email e senha." });
-
-  db.get(
-    `SELECT u.*, c.company_key
-     FROM users u
-     LEFT JOIN companies c ON c.id = u.company_id
-     WHERE u.email=? OR u.username=?`,
-    [login, login],
-    async (err, user) => {
-      if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
-      if (!user) return res.status(401).json({ ok: false, message: "Login inválido." });
-
-      const ok = await bcrypt.compare(password, user.password_hash);
-      if (!ok) return res.status(401).json({ ok: false, message: "Senha incorreta." });
-
-      const token = jwt.sign(
-        {
-          id: user.id,
-          company_id: user.company_id || null,
-          company_key: user.company_key || "",
-          username: user.username,
-          email: user.email,
-          role: user.role,
-          is_admin: !!user.is_admin
-        },
-        JWT_SECRET,
-        { expiresIn: "12h" }
-      );
-
-      return res.json({ ok: true, token, user: { username: user.username, email: user.email, role: user.role } });
-    }
-  );
-});
-
-// ✅ me
-app.get("/api/me", auth, (req, res) => res.json({ ok: true, payload: req.user }));
-
-// ✅ esqueci senha (email)
-app.post("/api/forgot/send", (req, res) => {
-  const email = normalizeLogin(req.body?.email);
-  if (!email) return res.status(400).json({ ok: false, message: "Digite seu email." });
-
-  db.get(`SELECT id FROM users WHERE email=?`, [email], async (err, user) => {
-    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
-    if (!user) return res.status(404).json({ ok: false, message: "Email não encontrado." });
-
-    const token = crypto.randomBytes(24).toString("hex");
-    const expires = Date.now() + 1000 * 60 * 20;
-
-    db.run(
-      `INSERT INTO reset_tokens (user_id, token, expires_at, used) VALUES (?,?,?,0)`,
-      [user.id, token, expires],
-      async (err2) => {
-        if (err2) return res.status(500).json({ ok: false, message: "Erro ao gerar token." });
-
-        const link = `${APP_URL}/reset.html?token=${token}`;
-
-        if (!hasMailerConfig()) {
-          console.log("📩 LINK RESET (SEM SMTP):", link);
-          return res.json({ ok: true, message: "SMTP não configurado. Veja logs do Render.", debugLink: link });
-        }
-
-        try {
-          const transport = createTransport();
-          await transport.sendMail({
-            from: FROM_EMAIL,
-            to: email,
-            subject: "Recuperação de senha • Chama",
-            html: `
-              <div style="font-family:Arial,sans-serif;line-height:1.4">
-                <h2>Recuperação de senha</h2>
-                <p>Clique no botão abaixo para criar uma nova senha. Este link expira em <b>20 minutos</b>.</p>
-                <p>
-                  <a href="${link}" style="display:inline-block;padding:12px 16px;border-radius:12px;
-                     background:#6a4bc9;color:#fff;text-decoration:none;font-weight:700">
-                    Redefinir senha
-                  </a>
-                </p>
-                <p>Se você não pediu isso, ignore este email.</p>
-              </div>
-            `
-          });
-
-          return res.json({ ok: true, message: "Email de recuperação enviado!" });
-        } catch {
-          return res.status(500).json({ ok: false, message: "Falha ao enviar email (SMTP)." });
-        }
-      }
-    );
-  });
-});
-
-// ✅ reset verify/confirm (para reset.html funcionar)
-app.get("/api/reset/verify", (req, res) => {
-  const token = String(req.query?.token || "");
-  if (!token) return res.status(400).json({ ok: false, message: "Token inválido." });
-
-  db.get(`SELECT * FROM reset_tokens WHERE token=?`, [token], (err, row) => {
-    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
-    if (!row) return res.status(404).json({ ok: false, message: "Token não encontrado." });
-    if (row.used) return res.status(410).json({ ok: false, message: "Token já usado." });
-    if (Date.now() > row.expires_at) return res.status(410).json({ ok: false, message: "Token expirado." });
-    return res.json({ ok: true });
-  });
-});
-
-app.post("/api/reset/confirm", async (req, res) => {
-  const token = String(req.body?.token || "");
-  const password = String(req.body?.password || "");
-  const confirm = String(req.body?.confirm || "");
-
-  if (!token || !password || !confirm) return res.status(400).json({ ok: false, message: "Dados inválidos." });
-  if (password.length < 6) return res.status(400).json({ ok: false, message: "Senha mínima: 6 caracteres." });
-  if (password !== confirm) return res.status(400).json({ ok: false, message: "As senhas não conferem." });
-
-  db.get(`SELECT * FROM reset_tokens WHERE token=?`, [token], async (err, row) => {
-    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
-    if (!row) return res.status(404).json({ ok: false, message: "Token inválido." });
-    if (row.used) return res.status(410).json({ ok: false, message: "Token já usado." });
-    if (Date.now() > row.expires_at) return res.status(410).json({ ok: false, message: "Token expirado." });
-
-    const hash = await bcrypt.hash(password, 10);
-
-    db.run(`UPDATE users SET password_hash=? WHERE id=?`, [hash, row.user_id], (err2) => {
-      if (err2) return res.status(500).json({ ok: false, message: "Erro ao atualizar senha." });
-
-      db.run(`UPDATE reset_tokens SET used=1 WHERE token=?`, [token], (err3) => {
-        if (err3) return res.status(500).json({ ok: false, message: "Erro ao finalizar reset." });
-        return res.json({ ok: true, message: "Senha atualizada com sucesso!" });
-      });
-    });
-  });
-});
-
-// ==============================
-// ✅ TICKETS (CLIENTE)
-// Ao abrir chamado: cria ticket + cria remote_session(ALLOWED)
-// ==============================
-app.post("/api/tickets/create", auth, async (req, res) => {
-  const u = req.user;
-
-  if (!u.company_id) return res.status(403).json({ ok: false, message: "Conta sem empresa." });
-  if (u.role !== "client" && u.role !== "dev") {
-    // por enquanto só cliente/DEV testa
-    return res.status(403).json({ ok: false, message: "Apenas cliente pode abrir chamado." });
-  }
-
-  const title = safeText(req.body?.title, 120);
-  const category = safeText(req.body?.category, 40);
-  const priority = safeText(req.body?.priority, 10);
-  const description = safeText(req.body?.description, 4000);
-
-  if (!title || !category || !priority || !description) {
-    return res.status(400).json({ ok: false, message: "Preencha título, categoria, prioridade e descrição." });
-  }
-
-  const now = Date.now();
-  db.run(
-    `INSERT INTO tickets (company_id, user_id, title, category, priority, description, status, created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?)`,
-    [u.company_id, u.id, title, category, priority, description, "OPEN", now, now],
-    function (err) {
-      if (err) return res.status(500).json({ ok: false, message: "Erro ao criar chamado." });
-
-      const ticketId = this.lastID;
-
-      // ✅ cria sessão remota automaticamente como PERMITIDO
-      db.run(
-        `INSERT INTO remote_sessions (ticket_id, status, created_at, updated_at, closed_at)
-         VALUES (?,?,?,?,NULL)`,
-        [ticketId, "ALLOWED", now, now],
-        (err2) => {
-          if (err2) return res.status(500).json({ ok: false, message: "Chamado criado, mas falhou sessão remota." });
-          return res.json({ ok: true, ticket_id: ticketId, remote_status: "ALLOWED" });
-        }
-      );
-    }
-  );
-});
-
-// ✅ lista tickets (cliente: só dele | operador: da empresa | dev: todos)
-app.get("/api/tickets/my", auth, (req, res) => {
-  const u = req.user;
-
-  let where = "";
-  let params = [];
-
-  if (u.role === "client") {
-    where = `WHERE t.user_id=?`;
-    params = [u.id];
-  } else if (u.role === "operator") {
-    if (!u.company_id) return res.json({ ok: true, tickets: [] });
-    where = `WHERE t.company_id=?`;
-    params = [u.company_id];
-  } else {
-    // dev
-    where = "";
-    params = [];
-  }
-
-  db.all(
-    `
-    SELECT t.*,
-           COALESCE(r.status,'ALLOWED') AS remote_status
-    FROM tickets t
-    LEFT JOIN remote_sessions r ON r.ticket_id = t.id
-    ${where}
-    ORDER BY t.updated_at DESC
-    `,
-    params,
-    (err, rows) => {
-      if (err) return res.status(500).json({ ok: false, message: "Erro ao buscar chamados." });
-      return res.json({ ok: true, tickets: rows || [] });
-    }
-  );
-});
-
-// ✅ detalhe do ticket (com permissão)
-app.get("/api/tickets/:id", auth, (req, res) => {
-  const u = req.user;
-  const id = parseInt(req.params.id, 10);
-
-  db.get(
-    `
-    SELECT t.*,
-           COALESCE(r.status,'ALLOWED') AS remote_status
-    FROM tickets t
-    LEFT JOIN remote_sessions r ON r.ticket_id = t.id
-    WHERE t.id=?
-    `,
-    [id],
-    (err, t) => {
-      if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
-      if (!t) return res.status(404).json({ ok: false, message: "Chamado não encontrado." });
-
-      // permissão
-      if (u.role === "client" && t.user_id !== u.id) return res.status(403).json({ ok: false, message: "Sem acesso." });
-      if (u.role === "operator" && t.company_id !== u.company_id) return res.status(403).json({ ok: false, message: "Sem acesso." });
-
-      return res.json({ ok: true, ticket: t });
-    }
-  );
-});
-
-// ✅ encerrar sessão remota (cliente dono OU operador da empresa OU dev)
-app.post("/api/remote/:ticketId/close", auth, (req, res) => {
-  const u = req.user;
-  const ticketId = parseInt(req.params.ticketId, 10);
-
-  db.get(`SELECT * FROM tickets WHERE id=?`, [ticketId], (err, t) => {
-    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
-    if (!t) return res.status(404).json({ ok: false, message: "Chamado não encontrado." });
-
-    if (u.role === "client" && t.user_id !== u.id) return res.status(403).json({ ok: false, message: "Sem acesso." });
-    if (u.role === "operator" && t.company_id !== u.company_id) return res.status(403).json({ ok: false, message: "Sem acesso." });
-
-    const now = Date.now();
-    db.run(
-      `UPDATE remote_sessions SET status='CLOSED', updated_at=?, closed_at=? WHERE ticket_id=?`,
-      [now, now, ticketId],
-      (err2) => {
-        if (err2) return res.status(500).json({ ok: false, message: "Erro ao encerrar sessão." });
-
-        // também marca ticket como resolved (opcional). Por enquanto não mexo no status do ticket.
-        return res.json({ ok: true, remote_status: "CLOSED" });
-      }
-    );
-  });
-});
-
-// (opcional) operador marcar como ACTIVE futuramente
-app.post("/api/remote/:ticketId/start", auth, operatorOnly, (req, res) => {
-  const u = req.user;
-  const ticketId = parseInt(req.params.ticketId, 10);
-
-  db.get(`SELECT * FROM tickets WHERE id=?`, [ticketId], (err, t) => {
-    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
-    if (!t) return res.status(404).json({ ok: false, message: "Chamado não encontrado." });
-    if (u.role === "operator" && t.company_id !== u.company_id) return res.status(403).json({ ok: false, message: "Sem acesso." });
-
-    const now = Date.now();
-    db.run(
-      `UPDATE remote_sessions SET status='ACTIVE', updated_at=? WHERE ticket_id=?`,
-      [now, ticketId],
-      (err2) => {
-        if (err2) return res.status(500).json({ ok: false, message: "Erro ao iniciar sessão." });
-        return res.json({ ok: true, remote_status: "ACTIVE" });
-      }
-    );
-  });
-});
-// ✅ DEV ONLY middleware
 function devOnly(req, res, next) {
   if (!req.user || req.user.role !== "dev") {
     return res.status(403).json({ ok: false, message: "Acesso DEV somente." });
@@ -652,7 +76,521 @@ function genCompanyKey(len = 10) {
   return out;
 }
 
-// ✅ DEV - Lista todas empresas + contadores
+// ---------- create tables ----------
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS companies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_key TEXT UNIQUE,
+      created_at INTEGER
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER,
+      username TEXT,
+      email TEXT,
+      password_hash TEXT,
+      role TEXT,
+      created_at INTEGER,
+      UNIQUE(company_id, username),
+      UNIQUE(email)
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS tickets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER,
+      user_id INTEGER,
+      title TEXT,
+      description TEXT,
+      status TEXT DEFAULT 'OPEN',
+      scan_json TEXT,
+      assigned_operator_id INTEGER,
+      claimed_at INTEGER,
+      resolved_at INTEGER,
+      created_at INTEGER,
+      updated_at INTEGER
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS remote_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticket_id INTEGER UNIQUE,
+      status TEXT,
+      created_at INTEGER,
+      updated_at INTEGER,
+      closed_at INTEGER
+    )
+  `);
+
+  // ✅ migrations safe
+  db.run(`ALTER TABLE tickets ADD COLUMN scan_json TEXT`, () => {});
+  db.run(`ALTER TABLE tickets ADD COLUMN assigned_operator_id INTEGER`, () => {});
+  db.run(`ALTER TABLE tickets ADD COLUMN claimed_at INTEGER`, () => {});
+  db.run(`ALTER TABLE tickets ADD COLUMN resolved_at INTEGER`, () => {});
+
+  // ✅ cria DEV user (se não existir)
+  const devUser = "otavio";
+  const devEmail = "otavini200@gmail.com";
+  const devPass = "26106867";
+
+  db.get(
+    `SELECT id FROM users WHERE username=? OR email=?`,
+    [devUser, devEmail],
+    async (err, row) => {
+      if (!row) {
+        const hash = await bcrypt.hash(devPass, 10);
+        const created = nowMs();
+        db.run(
+          `INSERT INTO users (company_id, username, email, password_hash, role, created_at)
+           VALUES (NULL,?,?,?,?,?)`,
+          [devUser, devEmail, hash, "dev", created],
+          () => console.log(`✅ Conta DEV criada: ${devUser} | senha: ${devPass}`)
+        );
+      }
+    }
+  );
+});
+
+// ---------- health ----------
+app.get("/api/health", (req, res) => {
+  return res.json({ ok: true, message: "Server online" });
+});
+
+/**
+ * ✅ AUTH
+ */
+app.post("/api/check-username", (req, res) => {
+  const username = normalizeLogin(req.body?.username);
+  if (!username) return res.json({ ok: true, available: false });
+
+  db.get(`SELECT id FROM users WHERE username=?`, [username], (err, row) => {
+    if (err) return res.status(500).json({ ok: false });
+    return res.json({ ok: true, available: !row });
+  });
+});
+
+app.post("/api/signup", (req, res) => {
+  const company_key = safeText(req.body?.company_key, 80).toUpperCase();
+  const username = normalizeLogin(req.body?.username);
+  const email = normalizeLogin(req.body?.email);
+  const password = String(req.body?.password || "");
+  const confirm = String(req.body?.confirm || "");
+  const role = req.body?.role === "operator" ? "operator" : "client";
+
+  if (!company_key || !username || !email || !password || !confirm) {
+    return res.status(400).json({ ok: false, message: "Preencha tudo." });
+  }
+  if (password.length < 6) return res.status(400).json({ ok: false, message: "Senha mínima: 6 caracteres." });
+  if (password !== confirm) return res.status(400).json({ ok: false, message: "Senhas não conferem." });
+
+  const created = nowMs();
+
+  db.get(`SELECT id FROM companies WHERE company_key=?`, [company_key], async (err, c) => {
+    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
+
+    const createUser = async (company_id) => {
+      const hash = await bcrypt.hash(password, 10);
+      db.run(
+        `INSERT INTO users (company_id, username, email, password_hash, role, created_at)
+         VALUES (?,?,?,?,?,?)`,
+        [company_id, username, email, hash, role, created],
+        function (err2) {
+          if (err2) {
+            const msg = String(err2.message || "");
+            if (msg.includes("UNIQUE") && msg.includes("email")) return res.status(409).json({ ok: false, message: "Email já em uso." });
+            if (msg.includes("UNIQUE") && msg.includes("username")) return res.status(409).json({ ok: false, message: "Usuário indisponível." });
+            return res.status(500).json({ ok: false, message: "Erro ao criar conta." });
+          }
+          return res.json({ ok: true, message: "Conta criada!" });
+        }
+      );
+    };
+
+    if (c?.id) {
+      return createUser(c.id);
+    } else {
+      db.run(
+        `INSERT INTO companies (company_key, created_at) VALUES (?,?)`,
+        [company_key, created],
+        function (err3) {
+          if (err3) return res.status(500).json({ ok: false, message: "Erro ao criar empresa." });
+          return createUser(this.lastID);
+        }
+      );
+    }
+  });
+});
+
+app.post("/api/login", (req, res) => {
+  const login = normalizeLogin(req.body?.login);
+  const password = String(req.body?.password || "");
+  if (!login || !password) return res.status(400).json({ ok: false, message: "Preencha tudo." });
+
+  db.get(
+    `SELECT id, company_id, username, email, password_hash, role FROM users WHERE username=? OR email=?`,
+    [login, login],
+    async (err, row) => {
+      if (err || !row) return res.status(401).json({ ok: false, message: "Login inválido." });
+      const ok = await bcrypt.compare(password, row.password_hash);
+      if (!ok) return res.status(401).json({ ok: false, message: "Login inválido." });
+
+      const token = signToken({ id: row.id });
+      return res.json({
+        ok: true,
+        token,
+        payload: { id: row.id, company_id: row.company_id, username: row.username, email: row.email, role: row.role }
+      });
+    }
+  );
+});
+
+app.get("/api/me", auth, (req, res) => {
+  return res.json({ ok: true, payload: req.user });
+});
+
+/**
+ * ✅ USER SETTINGS
+ */
+app.post("/api/user/change-email", auth, (req, res) => {
+  const u = req.user;
+  const newEmail = normalizeLogin(req.body?.email);
+  if (!newEmail) return res.status(400).json({ ok: false, message: "Email inválido." });
+
+  db.get(`SELECT id FROM users WHERE email=?`, [newEmail], (err, row) => {
+    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
+    if (row) return res.status(409).json({ ok: false, message: "Esse email já está em uso." });
+
+    db.run(`UPDATE users SET email=? WHERE id=?`, [newEmail, u.id], (err2) => {
+      if (err2) return res.status(500).json({ ok: false, message: "Erro ao atualizar email." });
+      return res.json({ ok: true, message: "✅ Email atualizado!" });
+    });
+  });
+});
+
+app.post("/api/user/change-password", auth, (req, res) => {
+  const u = req.user;
+  const currentPassword = String(req.body?.currentPassword || "");
+  const newPassword = String(req.body?.newPassword || "");
+  const confirm = String(req.body?.confirm || "");
+
+  if (!currentPassword || !newPassword || !confirm) return res.status(400).json({ ok: false, message: "Preencha tudo." });
+  if (newPassword.length < 6) return res.status(400).json({ ok: false, message: "Senha mínima: 6 caracteres." });
+  if (newPassword !== confirm) return res.status(400).json({ ok: false, message: "As senhas não conferem." });
+
+  db.get(`SELECT password_hash FROM users WHERE id=?`, [u.id], async (err, row) => {
+    if (err || !row) return res.status(404).json({ ok: false, message: "Usuário não encontrado." });
+
+    const ok = await bcrypt.compare(currentPassword, row.password_hash);
+    if (!ok) return res.status(401).json({ ok: false, message: "Senha atual incorreta." });
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    db.run(`UPDATE users SET password_hash=? WHERE id=?`, [hash, u.id], (err2) => {
+      if (err2) return res.status(500).json({ ok: false, message: "Erro ao atualizar senha." });
+      return res.json({ ok: true, message: "✅ Senha alterada!" });
+    });
+  });
+});
+
+/**
+ * ✅ TICKETS (CLIENT)
+ */
+app.post("/api/tickets/create", auth, (req, res) => {
+  const u = req.user;
+
+  if (u.role !== "client" && u.role !== "dev") {
+    return res.status(403).json({ ok: false, message: "Somente cliente pode abrir chamado." });
+  }
+
+  // dev pode criar sem empresa, mas se quiser amarrar dev a uma empresa depois, é só mudar aqui.
+  const companyId = u.role === "dev" ? (req.body?.company_id || u.company_id) : u.company_id;
+  if (!companyId && u.role !== "dev") return res.status(403).json({ ok: false, message: "Conta sem empresa." });
+
+  const title = safeText(req.body?.title, 120);
+  const description = safeText(req.body?.description, 4000);
+  const scan = req.body?.scan || null;
+
+  let scan_json = null;
+  try { scan_json = scan ? JSON.stringify(scan).slice(0, 20000) : null; } catch { scan_json = null; }
+
+  if (!title || !description) return res.status(400).json({ ok: false, message: "Preencha título e descrição." });
+
+  const created = nowMs();
+
+  db.run(
+    `INSERT INTO tickets (company_id, user_id, title, description, status, scan_json, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?)`,
+    [companyId, u.id, title, description, "OPEN", scan_json, created, created],
+    function (err) {
+      if (err) return res.status(500).json({ ok: false, message: "Erro ao criar chamado." });
+
+      const ticketId = this.lastID;
+
+      db.run(
+        `INSERT INTO remote_sessions (ticket_id, status, created_at, updated_at, closed_at)
+         VALUES (?,?,?,?,NULL)`,
+        [ticketId, "ALLOWED", created, created],
+        (err2) => {
+          if (err2) return res.status(500).json({ ok: false, message: "Chamado criado, mas remoto falhou." });
+          return res.json({ ok: true, ticket_id: ticketId, remote_status: "ALLOWED" });
+        }
+      );
+    }
+  );
+});
+
+app.get("/api/tickets/my", auth, (req, res) => {
+  const u = req.user;
+
+  if (u.role === "operator") return res.status(403).json({ ok: false, message: "Operador não usa /my." });
+
+  db.all(
+    `
+    SELECT t.*, r.status as remote_status
+    FROM tickets t
+    LEFT JOIN remote_sessions r ON r.ticket_id = t.id
+    WHERE t.user_id = ?
+    ORDER BY t.updated_at DESC
+    `,
+    [u.id],
+    (err, rows) => {
+      if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
+      return res.json({ ok: true, tickets: rows || [] });
+    }
+  );
+});
+
+app.get("/api/tickets/:id", auth, (req, res) => {
+  const u = req.user;
+  const id = parseInt(req.params.id, 10);
+
+  db.get(
+    `
+    SELECT t.*, r.status as remote_status,
+           c.username as client_username, c.email as client_email,
+           op.username as operator_username
+    FROM tickets t
+    LEFT JOIN remote_sessions r ON r.ticket_id = t.id
+    LEFT JOIN users c ON c.id = t.user_id
+    LEFT JOIN users op ON op.id = t.assigned_operator_id
+    WHERE t.id = ?
+    `,
+    [id],
+    (err, t) => {
+      if (err || !t) return res.status(404).json({ ok: false, message: "Chamado não encontrado." });
+
+      // dev pode ver tudo
+      if (u.role !== "dev") {
+        if (!u.company_id || t.company_id !== u.company_id) return res.status(403).json({ ok: false, message: "Acesso negado." });
+      }
+
+      // cliente só o dele
+      if (u.role === "client" && t.user_id !== u.id) return res.status(403).json({ ok: false, message: "Acesso negado." });
+
+      let scan = null;
+      try { scan = t.scan_json ? JSON.parse(t.scan_json) : null; } catch { scan = null; }
+
+      const claimMs = t.claimed_at ? (t.claimed_at - t.created_at) : null;
+      const totalMs = t.resolved_at ? (t.resolved_at - t.created_at) : null;
+
+      return res.json({
+        ok: true,
+        ticket: {
+          ...t,
+          scan,
+          time_to_claim_ms: claimMs,
+          total_time_ms: totalMs
+        }
+      });
+    }
+  );
+});
+
+/**
+ * ✅ REMOTO STATUS (por enquanto)
+ */
+app.post("/api/remote/:ticketId/start", auth, (req, res) => {
+  const u = req.user;
+  const ticketId = parseInt(req.params.ticketId, 10);
+  if (u.role !== "operator" && u.role !== "dev") return res.status(403).json({ ok: false, message: "Acesso negado." });
+
+  const now = nowMs();
+  db.run(`UPDATE remote_sessions SET status='ACTIVE', updated_at=? WHERE ticket_id=?`, [now, ticketId], (err) => {
+    if (err) return res.status(500).json({ ok: false, message: "Erro no remoto." });
+    return res.json({ ok: true, message: "✅ Remoto iniciado." });
+  });
+});
+
+app.post("/api/remote/:ticketId/close", auth, (req, res) => {
+  const u = req.user;
+  const ticketId = parseInt(req.params.ticketId, 10);
+  if (u.role !== "operator" && u.role !== "dev") return res.status(403).json({ ok: false, message: "Acesso negado." });
+
+  const now = nowMs();
+  db.run(
+    `UPDATE remote_sessions SET status='CLOSED', updated_at=?, closed_at=? WHERE ticket_id=?`,
+    [now, now, ticketId],
+    (err) => {
+      if (err) return res.status(500).json({ ok: false, message: "Erro no remoto." });
+      return res.json({ ok: true, message: "✅ Remoto encerrado." });
+    }
+  );
+});
+
+/**
+ * ✅ OPERADOR
+ */
+app.get("/api/operator/tickets/open", auth, (req, res) => {
+  const u = req.user;
+  if (u.role !== "operator" && u.role !== "dev") return res.status(403).json({ ok: false, message: "Acesso negado." });
+
+  const params = [];
+  let where = `WHERE t.status != 'RESOLVED'`;
+
+  if (u.role !== "dev") {
+    if (!u.company_id) return res.status(403).json({ ok: false, message: "Operador sem empresa." });
+    where += ` AND t.company_id = ?`;
+    params.push(u.company_id);
+  }
+
+  db.all(
+    `
+    SELECT t.*,
+      r.status as remote_status,
+      c.username as client_username, c.email as client_email,
+      op.username as operator_username
+    FROM tickets t
+    LEFT JOIN remote_sessions r ON r.ticket_id = t.id
+    LEFT JOIN users c ON c.id = t.user_id
+    LEFT JOIN users op ON op.id = t.assigned_operator_id
+    ${where}
+    ORDER BY
+      CASE WHEN t.assigned_operator_id IS NULL THEN 0 ELSE 1 END,
+      t.created_at DESC
+    `,
+    params,
+    (err, rows) => {
+      if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
+
+      const tickets = (rows || []).map(t => {
+        let scan = null;
+        try { scan = t.scan_json ? JSON.parse(t.scan_json) : null; } catch { scan = null; }
+
+        return {
+          ...t,
+          scan,
+          time_to_claim_ms: t.claimed_at ? (t.claimed_at - t.created_at) : null,
+          total_time_ms: t.resolved_at ? (t.resolved_at - t.created_at) : null
+        };
+      });
+
+      return res.json({ ok: true, tickets });
+    }
+  );
+});
+
+app.post("/api/operator/tickets/:id/claim", auth, (req, res) => {
+  const u = req.user;
+  if (u.role !== "operator" && u.role !== "dev") return res.status(403).json({ ok: false, message: "Acesso negado." });
+
+  const id = parseInt(req.params.id, 10);
+  const now = nowMs();
+
+  db.get(`SELECT * FROM tickets WHERE id=?`, [id], (err, t) => {
+    if (err || !t) return res.status(404).json({ ok: false, message: "Chamado não encontrado." });
+
+    if (u.role !== "dev") {
+      if (!u.company_id || t.company_id !== u.company_id) return res.status(403).json({ ok: false, message: "Acesso negado." });
+    }
+
+    if (t.assigned_operator_id) return res.status(409).json({ ok: false, message: "Esse chamado já foi assumido." });
+
+    db.run(
+      `UPDATE tickets
+       SET assigned_operator_id=?, claimed_at=?, status='IN_PROGRESS', updated_at=?
+       WHERE id=?`,
+      [u.id, now, now, id],
+      (err2) => {
+        if (err2) return res.status(500).json({ ok: false, message: "Erro ao assumir." });
+        return res.json({ ok: true, message: "✅ Chamado assumido!" });
+      }
+    );
+  });
+});
+
+app.post("/api/operator/tickets/:id/resolve", auth, (req, res) => {
+  const u = req.user;
+  if (u.role !== "operator" && u.role !== "dev") return res.status(403).json({ ok: false, message: "Acesso negado." });
+
+  const id = parseInt(req.params.id, 10);
+  const now = nowMs();
+
+  db.get(`SELECT * FROM tickets WHERE id=?`, [id], (err, t) => {
+    if (err || !t) return res.status(404).json({ ok: false, message: "Chamado não encontrado." });
+
+    if (u.role !== "dev") {
+      if (!u.company_id || t.company_id !== u.company_id) return res.status(403).json({ ok: false, message: "Acesso negado." });
+      if (t.assigned_operator_id !== u.id) return res.status(403).json({ ok: false, message: "Você não assumiu esse chamado." });
+    }
+
+    db.run(
+      `UPDATE tickets SET status='RESOLVED', resolved_at=?, updated_at=? WHERE id=?`,
+      [now, now, id],
+      (err2) => {
+        if (err2) return res.status(500).json({ ok: false, message: "Erro ao finalizar." });
+        return res.json({ ok: true, message: "✅ Chamado finalizado!" });
+      }
+    );
+  });
+});
+
+app.get("/api/operator/metrics", auth, (req, res) => {
+  const u = req.user;
+  if (u.role !== "operator" && u.role !== "dev") return res.status(403).json({ ok: false, message: "Acesso negado." });
+
+  const params = [];
+  let whereTickets = `WHERE t.assigned_operator_id IS NOT NULL`;
+
+  if (u.role !== "dev") {
+    whereTickets += ` AND t.company_id = ?`;
+    params.push(u.company_id);
+  }
+
+  const q = `
+    SELECT
+      op.id as operator_id,
+      op.username as operator_name,
+      COUNT(t.id) as total_handled,
+      AVG(CASE WHEN t.claimed_at IS NOT NULL THEN (t.claimed_at - t.created_at) END) as avg_claim_ms,
+      AVG(CASE WHEN t.resolved_at IS NOT NULL THEN (t.resolved_at - t.created_at) END) as avg_total_ms
+    FROM users op
+    LEFT JOIN tickets t ON t.assigned_operator_id = op.id
+    ${whereTickets}
+    GROUP BY op.id
+    ORDER BY total_handled DESC
+  `;
+
+  db.all(q, params, (err, rows) => {
+    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
+    const data = (rows || []).map(r => ({
+      operator_id: r.operator_id,
+      operator_name: r.operator_name,
+      total_handled: r.total_handled || 0,
+      avg_claim_ms: r.avg_claim_ms ? Math.round(r.avg_claim_ms) : null,
+      avg_total_ms: r.avg_total_ms ? Math.round(r.avg_total_ms) : null
+    }));
+    return res.json({ ok: true, data });
+  });
+});
+
+/**
+ * ✅ DEV
+ */
 app.get("/api/dev/companies", auth, devOnly, (req, res) => {
   const q = `
     SELECT
@@ -660,12 +598,10 @@ app.get("/api/dev/companies", auth, devOnly, (req, res) => {
       c.company_key,
       c.created_at,
 
-      -- usuários
       (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id) as users_total,
       (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id AND u.role = 'client') as users_clients,
       (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id AND u.role = 'operator') as users_operators,
 
-      -- tickets
       (SELECT COUNT(*) FROM tickets t WHERE t.company_id = c.id) as tickets_total,
       (SELECT COUNT(*) FROM tickets t WHERE t.company_id = c.id AND t.status = 'OPEN') as tickets_open,
       (SELECT COUNT(*) FROM tickets t WHERE t.company_id = c.id AND t.status = 'IN_PROGRESS') as tickets_progress,
@@ -680,34 +616,25 @@ app.get("/api/dev/companies", auth, devOnly, (req, res) => {
   });
 });
 
-// ✅ DEV - Criar empresa + chave
 app.post("/api/dev/companies/create", auth, devOnly, (req, res) => {
   let key = String(req.body?.company_key || "").trim().toUpperCase();
   if (!key) key = genCompanyKey(10);
 
-  const created = Date.now();
+  const created = nowMs();
   db.run(
     `INSERT INTO companies (company_key, created_at) VALUES (?,?)`,
     [key, created],
     function (err) {
       if (err) {
         const msg = String(err.message || "");
-        if (msg.includes("UNIQUE")) {
-          return res.status(409).json({ ok: false, message: "Chave já existe, tente outra." });
-        }
+        if (msg.includes("UNIQUE")) return res.status(409).json({ ok: false, message: "Chave já existe, tente outra." });
         return res.status(500).json({ ok: false, message: "Erro ao criar empresa." });
       }
-
-      return res.json({
-        ok: true,
-        message: "✅ Empresa criada!",
-        company: { id: this.lastID, company_key: key, created_at: created }
-      });
+      return res.json({ ok: true, message: "✅ Empresa criada!", company: { id: this.lastID, company_key: key, created_at: created } });
     }
   );
 });
 
-// ✅ DEV - Ver usuários de uma empresa
 app.get("/api/dev/companies/:id/users", auth, devOnly, (req, res) => {
   const id = parseInt(req.params.id, 10);
   db.all(
@@ -723,7 +650,6 @@ app.get("/api/dev/companies/:id/users", auth, devOnly, (req, res) => {
   );
 });
 
-// ✅ DEV - Ver chamados de uma empresa
 app.get("/api/dev/companies/:id/tickets", auth, devOnly, (req, res) => {
   const id = parseInt(req.params.id, 10);
   db.all(
@@ -746,9 +672,7 @@ app.get("/api/dev/companies/:id/tickets", auth, devOnly, (req, res) => {
   );
 });
 
-const PORT = process.env.PORT || 3333;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("✅ Server ON na porta " + PORT);
-  seedDevAccount();
+// ---------- start ----------
+app.listen(PORT, () => {
+  console.log("✅ Server ON na porta", PORT);
 });
-
