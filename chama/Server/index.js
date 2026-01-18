@@ -172,7 +172,7 @@ db.serialize(() => {
 // =====================
 app.get("/api/health", (req, res) => res.json({ ok: true, message: "Server online" }));
 
-// ✅ VALIDAR CHAVE (NOVO - pra app conferir antes do signup)
+// ✅ VALIDAR CHAVE
 app.post("/api/company/validate-key", (req, res) => {
   const company_key = safeText(req.body?.company_key, 80).toUpperCase();
   if (!company_key) return res.status(400).json({ ok: false, message: "Informe a chave." });
@@ -207,7 +207,7 @@ app.post("/api/check-username", (req, res) => {
 });
 
 // =====================
-// SIGNUP (exige chave ativa)
+// SIGNUP
 // =====================
 app.post("/api/signup", (req, res) => {
   const company_key = safeText(req.body?.company_key, 80).toUpperCase();
@@ -296,7 +296,8 @@ app.get("/api/me", auth, (req, res) => res.json({ ok: true, payload: req.user })
 app.get("/api/dev/companies", auth, devOnly, (req, res) => {
   const now = nowMs();
 
-  const q = `
+  db.all(
+    `
     SELECT
       c.id,
       c.company_key,
@@ -311,29 +312,30 @@ app.get("/api/dev/companies", auth, devOnly, (req, res) => {
       (SELECT COUNT(*) FROM tickets t WHERE t.company_id = c.id) as tickets_total
     FROM companies c
     ORDER BY c.expires_at ASC
-  `;
+  `,
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
 
-  db.all(q, [], (err, rows) => {
-    if (err) return res.status(500).json({ ok: false, message: "Erro no servidor." });
+      const companies = (rows || []).map((c) => {
+        const exp = Number(c.expires_at || 0);
+        const days_left = exp ? Math.ceil((exp - now) / MS_DAY) : null;
+        const expired = exp && exp < now;
+        const expiring_soon = !expired && days_left !== null && days_left <= 7;
+        return { ...c, days_left, expired, expiring_soon };
+      });
 
-    const companies = (rows || []).map((c) => {
-      const exp = Number(c.expires_at || 0);
-      const days_left = exp ? Math.ceil((exp - now) / MS_DAY) : null;
-      const expired = exp && exp < now;
-      const expiring_soon = !expired && days_left !== null && days_left <= 7;
-      return { ...c, days_left, expired, expiring_soon };
-    });
+      const alerts = {
+        expired: companies.filter(x => x.expired).length,
+        expiring_soon: companies.filter(x => x.expiring_soon).length
+      };
 
-    const alerts = {
-      expired: companies.filter(x => x.expired).length,
-      expiring_soon: companies.filter(x => x.expiring_soon).length
-    };
-
-    return res.json({ ok: true, companies, alerts });
-  });
+      return res.json({ ok: true, companies, alerts });
+    }
+  );
 });
 
-// DEV CREATE COMPANY (chave + dados)
+// DEV CREATE COMPANY
 app.post("/api/dev/companies/create", auth, devOnly, (req, res) => {
   let key = String(req.body?.company_key || "").trim().toUpperCase();
   if (!key) key = genCompanyKey(10);
@@ -367,6 +369,32 @@ app.post("/api/dev/companies/create", auth, devOnly, (req, res) => {
       });
     }
   );
+});
+
+// ✅ DEV: RENOVAR CONTRATO (+31 DIAS)
+app.post("/api/dev/companies/:id/extend", auth, devOnly, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const days = parseInt(req.body?.days || COMPANY_DAYS, 10);
+
+  if (!id) return res.status(400).json({ ok: false, message: "ID inválido." });
+  if (!days || days < 1 || days > 365) return res.status(400).json({ ok: false, message: "Dias inválidos." });
+
+  db.get(`SELECT id, expires_at FROM companies WHERE id=?`, [id], (err, c) => {
+    if (err || !c) return res.status(404).json({ ok: false, message: "Empresa não encontrada." });
+
+    const currentExp = Number(c.expires_at || 0);
+    const base = currentExp > nowMs() ? currentExp : nowMs(); // se já venceu, renova a partir de HOJE
+    const newExp = addDays(base, days);
+
+    db.run(
+      `UPDATE companies SET expires_at=? WHERE id=?`,
+      [newExp, id],
+      (err2) => {
+        if (err2) return res.status(500).json({ ok: false, message: "Erro ao renovar contrato." });
+        return res.json({ ok: true, message: `✅ Contrato renovado +${days} dias.`, expires_at: newExp });
+      }
+    );
+  });
 });
 
 // =====================
@@ -406,6 +434,7 @@ app.get("/api/tickets/my", auth, (req, res) => {
   });
 });
 
+// operador normal
 app.get("/api/operator/tickets/open", auth, (req, res) => {
   const u = req.user;
   if (u.role !== "operator" && u.role !== "dev") return res.status(403).json({ ok: false, message: "Acesso negado." });
@@ -460,7 +489,7 @@ app.get("/api/tickets/:id", auth, (req, res) => {
 });
 
 // =====================
-// SOCKET.IO (sinalização do remoto)
+// SOCKET.IO (sinalização remoto - base)
 // =====================
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
@@ -481,5 +510,4 @@ io.on("connection", (socket) => {
   });
 });
 
-// =====================
 server.listen(PORT, () => console.log("✅ Server ON na porta", PORT));
